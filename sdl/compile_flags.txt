@@ -1,0 +1,12 @@
+-xc++
+-std=gnu++14
+-I.
+-I../gametools
+-I../iosfc
+-I../iosfc/patools
+-I../libs/soil
+-I/opt/homebrew/include/SDL2
+-I/opt/homebrew/include/freetype2
+-DMACOSX=1
+-DALIHOOD_STRICT_ASSETS=0
+-DGT_NO_FRIBIDI

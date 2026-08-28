@@ -1,0 +1,16 @@
+._*
+*~
+*.pyc
+*.o
+*.old
+
+# Build output
+sdl/build/
+sdl/goom-data/
+tests/zoom_filter/zoom_filter_test
+
+# Goom data sources / generated
+Goom/data/goom.001
+
+# Misc generated
+iosfc/patools/test.psd
