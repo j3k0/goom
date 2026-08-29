@@ -3,9 +3,9 @@
 #include "cpu_info.h"
 #include "default_scripts.h"
 #include "drawmethods.h"
+#include <string.h>
 #include <math.h>
 #include <stdio.h>
-
 
 #ifdef CPU_POWERPC
 #include <sys/types.h>
@@ -54,6 +54,7 @@ static void setOptimizedMethods(PluginInfo *p) {
 void plugin_info_init(PluginInfo *pp, int nbVisuals) {
 
 	PluginInfo p;
+	memset(&p, 0, sizeof(p));  /* zero-init: SoundInfo counters (cycle, bigGoomLimit, ...) were left as stack garbage (bug report B3) */
 	int i;
 
 	p.sound.speedvar = p.sound.accelvar = p.sound.totalgoom = 0;

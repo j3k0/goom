@@ -402,7 +402,7 @@ static void fs_apply(VisualFX *_this, Pixel *src, Pixel *dest, PluginInfo *info)
 	flow_coupling = (float)IVAL(data->flow_coupling_p) / 100.0f;
 	vmax2 = FS_MAX_SPEED * info->screen.width;
 	vmax2 *= vmax2;
-	FVAL(data->nbStars_p) = (float)data->nbStars / (float)data->maxStars;
+	FVAL(data->nbStars_p) = (data->maxStars > 0) ? (float)data->nbStars / (float)data->maxStars : 0.0f;
 	data->nbStars_p.change_listener(&data->nbStars_p);
 	data->maxStars = IVAL(data->nbStars_limit_p);
 	data->fx_mode = IVAL(data->fx_mode_p);

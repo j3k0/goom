@@ -114,6 +114,8 @@ CPPFLAGS += -DSDL_GAME_TITLE=\"Goom\" -DSDL_GAME_ORG=\"Fovea\" -DSDL_GAME_NAME=\
 CFLAGS += $(CPPFLAGS)
 CXXFLAGS += $(CPPFLAGS)
 
+.DEFAULT_GOAL := default
+
 OBJ := $(patsubst %.cpp,$(BUILD)/%.o,$(patsubst %.c,$(BUILD)/%.o,$(subst $(TOP)/,,$(SRC))))
 
 # Header dependency tracking: -MMD -MP above emits a .d next to each .o;
