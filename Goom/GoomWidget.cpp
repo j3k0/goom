@@ -81,7 +81,8 @@ void GoomWidget::updateGoom() {
         // Update Goom
         short soundData[2][512];
         m_source->getSample(soundData);
-        m_rgbaBuffer = (char *)goom_update(m_goom, soundData, 0, /*m_fps*/0, NULL, NULL);
+        /* TEST: force the kaleidoscope mode (KALEIDO_MODE) for visual check */
+        m_rgbaBuffer = (char *)goom_update(m_goom, soundData, 11, /*m_fps*/0, NULL, NULL);
         
         // Alpha Magic
         // TODO: have goom set the alpha value properly, or have a RGB texture and change the data alignment in opengl code

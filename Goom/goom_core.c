@@ -32,6 +32,9 @@
 /* TODO: put that as variable in PluginInfo */
 #define TIME_BTW_CHG 300
 
+/* kaleidoscope : fold counts the randomizer can pick (KALEIDO_MODE) */
+static const int kaleidoFoldCounts[4] = { 3, 4, 6, 8 };
+
 static void choose_a_goom_line (PluginInfo *goomInfo, float *param1, float *param2, int *couleur,
                                 int *mode, float *amplitude, int far);
 
@@ -306,6 +309,14 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
                 case 30:
                     goomInfo->update.zoomFilterData.mode = YONLY_MODE;
                     break;
+                case 23:
+                case 24:
+                    goomInfo->update.zoomFilterData.mode = KALEIDO_MODE;
+                    goomInfo->update.zoomFilterData.waveEffect = 0;
+                    goomInfo->update.zoomFilterData.hypercosEffect = 0;
+                    goomInfo->update.zoomFilterData.foldCount = kaleidoFoldCounts[goom_irand(goomInfo->gRandom,4)];
+                    goomInfo->update.zoomFilterData.foldAngle = 0.0f;
+                    break;
                 case 31:
                 case 32:
                 case 33:
@@ -402,7 +413,8 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
                     
                     if ((goomInfo->update.zoomFilterData.mode == WATER_MODE)
                         || (goomInfo->update.zoomFilterData.mode == YONLY_MODE)
-                        || (goomInfo->update.zoomFilterData.mode == AMULETTE_MODE)) {
+                        || (goomInfo->update.zoomFilterData.mode == AMULETTE_MODE)
+                        || (goomInfo->update.zoomFilterData.mode == KALEIDO_MODE)) {
                         goomInfo->update.zoomFilterData.middleX = goomInfo->screen.width / 2;
                         goomInfo->update.zoomFilterData.middleY = goomInfo->screen.height / 2;
                     }
@@ -460,10 +472,22 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
                         goomInfo->update.lockvar *= 2;
                     }
                     
-                    if (goomInfo->update.zoomFilterData.mode == AMULETTE_MODE) {
+                    if ((goomInfo->update.zoomFilterData.mode == AMULETTE_MODE)
+                        || (goomInfo->update.zoomFilterData.mode == KALEIDO_MODE)) {
                         goomInfo->update.zoomFilterData.vPlaneEffect = 0;
                         goomInfo->update.zoomFilterData.hPlaneEffect = 0;
                         goomInfo->update.zoomFilterData.noisify = 0;
+                    }
+
+                    /* kaleidoscope : rotation du eventail et re-sectorisation
+                     * sur les gooms (comme la vitesse, aleatoires) */
+                    if (goomInfo->update.zoomFilterData.mode == KALEIDO_MODE) {
+                        if (goom_irand(goomInfo->gRandom,4) == 0)
+                            goomInfo->update.zoomFilterData.foldCount =
+                                kaleidoFoldCounts[goom_irand(goomInfo->gRandom,4)];
+                        goomInfo->update.zoomFilterData.foldAngle =
+                            goom_irand(goomInfo->gRandom,628) / 100.0f
+                            - (float)M_PI;
                     }
                     
                     if ((goomInfo->update.zoomFilterData.middleX == 1) || (goomInfo->update.zoomFilterData.middleX == (signed int)goomInfo->screen.width - 1)) {

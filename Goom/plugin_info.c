@@ -146,7 +146,8 @@ void plugin_info_init(PluginInfo *pp, int nbVisuals) {
 		ZoomFilterData zfd = {
 			127, 8, 16,
 			1, 1, 0, NORMAL_MODE,
-			0, 0, 0, 0, 0
+			0, 0, 0, 0, 0,
+			4, 0.0f
 		};
 		pp->update.zoomFilterData = zfd;
 	}

@@ -132,11 +132,62 @@ typedef struct _ZOOM_FILTER_FX_WRAPPER_DATA {
     /** calculatePXandPY statics */
     int wave;
     int wavesp;
-    
+
+    /** kaleidoscope (KALEIDO_MODE) : eventail de 2 miroirs precalcule */
+    int     kaleidoN;              /* nombre de secteurs (0 = non calcule) */
+    float   kaleidoAngle;          /* angle du 1er miroir (radians) */
+    float   kaleidoN1x, kaleidoN1y;    /* normale cote chambre du 1er miroir */
+    float   kaleidoN2x, kaleidoN2y;    /* normale cote chambre du 2eme miroir */
 } ZoomFilterFXWrapperData;
 
 
 
+/* Kaleidoscope : precalcul des 2 miroirs du secteur fondamental.
+ * Secteur = chambre entre la droite d'angle foldAngle et celle d'angle
+ * foldAngle + pi/N. Refleter alternativement sur les 2 miroirs ramene
+ * tout point dans la chambre en <= N reflexions (groupe diedral 2N). */
+static void kaleidoPrecompute (ZoomFilterFXWrapperData *data, int foldCount, float foldAngle)
+{
+    float d = (float)M_PI / foldCount;
+
+    data->kaleidoN = foldCount;
+    data->kaleidoAngle = foldAngle;
+
+    /* normales cote chambre : miroir 1 (droite d'angle a) */
+    data->kaleidoN1x = -sinf (foldAngle);
+    data->kaleidoN1y = cosf (foldAngle);
+    /* miroir 2 (droite d'angle a + pi/N) */
+    data->kaleidoN2x = sinf (foldAngle + d);
+    data->kaleidoN2y = -cosf (foldAngle + d);
+}
+
+/* Kaleidoscope : replie (X, Y) dans la chambre fondamentale. zoomVector
+ * travaille deja en coordonnees relatives au milieu, le centre du pli est
+ * donc (0, 0). Rend le point replie via (fx, fy). */
+static inline void kaleidoFold (ZoomFilterFXWrapperData *data, float X, float Y, float *fx, float *fy)
+{
+    int i;
+
+    for (i = 0; i < 2 * data->kaleidoN + 2; i++) {
+        float d1 = X * data->kaleidoN1x + Y * data->kaleidoN1y;
+        float d2 = X * data->kaleidoN2x + Y * data->kaleidoN2y;
+
+        if (d1 >= 0.0f && d2 >= 0.0f)
+            break;              /* dans la chambre : fini */
+        if (d1 < 0.0f) {
+            /* reflexion p' = p - 2 (p.n) n */
+            X -= 2.0f * d1 * data->kaleidoN1x;
+            Y -= 2.0f * d1 * data->kaleidoN1y;
+        }
+        else {
+            X -= 2.0f * d2 * data->kaleidoN2x;
+            Y -= 2.0f * d2 * data->kaleidoN2y;
+        }
+    }
+
+    *fx = X;
+    *fy = Y;
+}
 
 static inline v2g zoomVector(ZoomFilterFXWrapperData *data, float X, float Y)
 {
@@ -172,6 +223,10 @@ static inline v2g zoomVector(ZoomFilterFXWrapperData *data, float X, float Y)
             break;
             //case YONLY_MODE:
             break;
+        case KALEIDO_MODE:
+            /* le pli est applique apres (voir ci-dessous) : ici rien a
+             * ajouter au coef radial, l'effet est purement geometrique */
+            break;
         case SPEEDWAY_MODE:
             coefVitesse *= 4.0f * Y;
             break;
@@ -186,6 +241,16 @@ static inline v2g zoomVector(ZoomFilterFXWrapperData *data, float X, float Y)
     
     vx = coefVitesse * X;
     vy = coefVitesse * Y;
+
+    /* Kaleidoscope : compose le pli avec le zoom radial. Le noyau echantillonne
+     * la source en (X - vx) : ici on veut qu'il lise dans le secteur replie,
+     * tire par le zoom radial -> source = (1 - coef) * point replie. */
+    if (data->theMode == KALEIDO_MODE && data->kaleidoN > 0) {
+        float fx, fy;
+        kaleidoFold (data, X, Y, &fx, &fy);
+        vx = X - (1.0f - coefVitesse) * fx;
+        vy = Y - (1.0f - coefVitesse) * fy;
+    }
     
     /* Amulette 2 */
     // vx = X * tan(dist);
@@ -266,6 +331,13 @@ static void makeZoomBufferStripe(ZoomFilterFXWrapperData * data, int INTERLACE_I
             
             data->brutT[premul_y_prevX] = ((int)((X-vector.x)*inv_ratio)+((int)(data->middleX*BUFFPOINTNB)));
             data->brutT[premul_y_prevX+1] = ((int)((Y-vector.y)*inv_ratio)+((int)(data->middleY*BUFFPOINTNB)));
+            /* KALEIDO : les reflexions peuvent envoyer la source hors buffer
+             * cote negatif ; les noyaux ne testent que la borne superieure
+             * (px >= ax), donc on borne ici (les noyaux restent inchanges). */
+            if (data->brutT[premul_y_prevX] < 0)
+                data->brutT[premul_y_prevX] = 0;
+            if (data->brutT[premul_y_prevX+1] < 0)
+                data->brutT[premul_y_prevX+1] = 0;
             premul_y_prevX += 2;
             X += ratio;
         }
@@ -564,6 +636,8 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
         data->waveEffect = zf->waveEffect;
         data->hypercosEffect = zf->hypercosEffect;
         data->noisify = zf->noisify;
+        if (zf->foldCount != data->kaleidoN || zf->foldAngle != data->kaleidoAngle)
+            kaleidoPrecompute (data, zf->foldCount ? zf->foldCount : 4, zf->foldAngle);
         data->interlace_start = 0;
     }
     
@@ -746,6 +820,8 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     data->firedec = 0;
     
     data->wave = data->wavesp = 0;
+
+    kaleidoPrecompute (data, 4, 0.0f);
     
     data->enabled_bp = secure_b_param("Enabled", 1);
     
