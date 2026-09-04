@@ -9,7 +9,7 @@ extern "C" {
 #include "goom_plugin_info.h"
 //#include "goomsl.h"
 
-#define NB_FX 11
+#define NB_FX 10
 
 PluginInfo *goom_init (guint32 resx, guint32 resy);
 void goom_set_resolution (PluginInfo *goomInfo, guint32 resx, guint32 resy);

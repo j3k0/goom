@@ -24,7 +24,8 @@ struct _ZOOM_FILTER_DATA
 	int     waveEffect;        /* applique une "surcouche" de wave effect */
 	int     hypercosEffect;    /* applique une "surcouche de hypercos effect */
 
-	/** kaleidoscope (KALEIDO_MODE) */
+	/** kaleidoscope addon (s'applique a tous les modes) */
+	int     kaleidoEffect;      /* 1 = plier l'espace source en mandala */
 	int     foldCount;          /* nombre de secteurs N (0 = defaut) */
 	float   foldAngle;          /* rotation du eventail de miroirs (radians) */
 
@@ -41,7 +42,6 @@ struct _ZOOM_FILTER_DATA
 #define HYPERCOS2_MODE 7
 #define YONLY_MODE 8
 #define SPEEDWAY_MODE 9
-#define KALEIDO_MODE 10
 
 void pointFilter (PluginInfo *goomInfo, Pixel * pix1, Color c,
                   float t1, float t2, float t3, float t4, guint32 cycle);

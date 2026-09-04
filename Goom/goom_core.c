@@ -32,8 +32,12 @@
 /* TODO: put that as variable in PluginInfo */
 #define TIME_BTW_CHG 300
 
-/* kaleidoscope : fold counts the randomizer can pick (KALEIDO_MODE) */
+/* kaleidoscope addon : fold counts the randomizer can pick, and the
+ * probability (1-in-N) that the addon starts / stops on each
+ * mode-change draw. Tune for taste. */
 static const int kaleidoFoldCounts[4] = { 3, 4, 6, 8 };
+#define KALEIDO_START_PROB 6
+#define KALEIDO_STOP_PROB 4
 
 static void choose_a_goom_line (PluginInfo *goomInfo, float *param1, float *param2, int *couleur,
                                 int *mode, float *amplitude, int far);
@@ -242,7 +246,19 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
         || (goomInfo->update.cyclesSinceLastChange > TIME_BTW_CHG)) {
         
         /* changement eventuel de mode */
-        if (goom_irand(goomInfo->gRandom,16) == 0)
+        if (goom_irand(goomInfo->gRandom,16) == 0) {
+            /* addon kaleidoscope : depart/arret tires independamment du mode */
+            if (!goomInfo->update.zoomFilterData.kaleidoEffect) {
+                if (goom_irand(goomInfo->gRandom,KALEIDO_START_PROB) == 0) {
+                    goomInfo->update.zoomFilterData.kaleidoEffect = 1;
+                    goomInfo->update.zoomFilterData.foldCount =
+                        kaleidoFoldCounts[goom_irand(goomInfo->gRandom,4)];
+                    goomInfo->update.zoomFilterData.foldAngle = 0.0f;
+                }
+            }
+            else if (goom_irand(goomInfo->gRandom,KALEIDO_STOP_PROB) == 0)
+                goomInfo->update.zoomFilterData.kaleidoEffect = 0;
+
             switch (goom_irand(goomInfo->gRandom,34)) {
                 case 0:
                 case 10:
@@ -309,14 +325,6 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
                 case 30:
                     goomInfo->update.zoomFilterData.mode = YONLY_MODE;
                     break;
-                case 23:
-                case 24:
-                    goomInfo->update.zoomFilterData.mode = KALEIDO_MODE;
-                    goomInfo->update.zoomFilterData.waveEffect = 0;
-                    goomInfo->update.zoomFilterData.hypercosEffect = 0;
-                    goomInfo->update.zoomFilterData.foldCount = kaleidoFoldCounts[goom_irand(goomInfo->gRandom,4)];
-                    goomInfo->update.zoomFilterData.foldAngle = 0.0f;
-                    break;
                 case 31:
                 case 32:
                 case 33:
@@ -327,7 +335,13 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
                     goomInfo->update.zoomFilterData.waveEffect = 0;
                     goomInfo->update.zoomFilterData.hypercosEffect = 0;
             }
+        }
     }
+
+    /* TEST (a retirer avant release) : forcer l'addon kaleido ON */
+    goomInfo->update.zoomFilterData.kaleidoEffect = 1;
+    if (goomInfo->update.zoomFilterData.foldCount == 0)
+        goomInfo->update.zoomFilterData.foldCount = 4;
         
         /* tout ceci ne sera fait qu'en cas de non-blocage */
         if (goomInfo->update.lockvar == 0) {
@@ -414,7 +428,7 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
                     if ((goomInfo->update.zoomFilterData.mode == WATER_MODE)
                         || (goomInfo->update.zoomFilterData.mode == YONLY_MODE)
                         || (goomInfo->update.zoomFilterData.mode == AMULETTE_MODE)
-                        || (goomInfo->update.zoomFilterData.mode == KALEIDO_MODE)) {
+                        || (goomInfo->update.zoomFilterData.kaleidoEffect)) {
                         goomInfo->update.zoomFilterData.middleX = goomInfo->screen.width / 2;
                         goomInfo->update.zoomFilterData.middleY = goomInfo->screen.height / 2;
                     }
@@ -473,15 +487,15 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
                     }
                     
                     if ((goomInfo->update.zoomFilterData.mode == AMULETTE_MODE)
-                        || (goomInfo->update.zoomFilterData.mode == KALEIDO_MODE)) {
+                        || (goomInfo->update.zoomFilterData.kaleidoEffect)) {
                         goomInfo->update.zoomFilterData.vPlaneEffect = 0;
                         goomInfo->update.zoomFilterData.hPlaneEffect = 0;
                         goomInfo->update.zoomFilterData.noisify = 0;
                     }
 
-                    /* kaleidoscope : rotation du eventail et re-sectorisation
-                     * sur les gooms (comme la vitesse, aleatoires) */
-                    if (goomInfo->update.zoomFilterData.mode == KALEIDO_MODE) {
+                    /* kaleidoscope addon : rotation du eventail et
+                     * re-sectorisation sur les gooms (comme la vitesse) */
+                    if (goomInfo->update.zoomFilterData.kaleidoEffect) {
                         if (goom_irand(goomInfo->gRandom,4) == 0)
                             goomInfo->update.zoomFilterData.foldCount =
                                 kaleidoFoldCounts[goom_irand(goomInfo->gRandom,4)];

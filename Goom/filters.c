@@ -133,7 +133,8 @@ typedef struct _ZOOM_FILTER_FX_WRAPPER_DATA {
     int wave;
     int wavesp;
 
-    /** kaleidoscope (KALEIDO_MODE) : eventail de 2 miroirs precalcule */
+    /** kaleidoscope addon (kaleidoEffect) : eventail de 2 miroirs precalcule */
+    int     kaleidoEffect;          /* addon actif (1 = plier l'espace source) */
     int     kaleidoN;              /* nombre de secteurs (0 = non calcule) */
     float   kaleidoAngle;          /* angle du 1er miroir (radians) */
     float   kaleidoN1x, kaleidoN1y;    /* normale cote chambre du 1er miroir */
@@ -193,7 +194,17 @@ static inline v2g zoomVector(ZoomFilterFXWrapperData *data, float X, float Y)
 {
     v2g vecteur;
     float vx, vy;
-    float sq_dist = X*X + Y*Y;
+    float fx = X, fy = Y;   /* point replie (identique si l'addon est inactif) */
+    float sq_dist;
+
+    /* Kaleidoscope addon : plie l'espace AVANT tout le reste, puis on
+     * evalue le mode de base sur le point replie. Comme fold(g.p) == fold(p)
+     * pour toute image diedrale g, chaque image miroir echantillonne la
+     * meme source -> la symetrie est preservee quel que soit le mode. */
+    if (data->kaleidoEffect && data->kaleidoN > 0)
+        kaleidoFold (data, X, Y, &fx, &fy);
+
+    sq_dist = fx*fx + fy*fy;
     
     /*    sx = (X < 0.0f) ? -1.0f : 1.0f;
     sy = (Y < 0.0f) ? -1.0f : 1.0f;
@@ -223,10 +234,6 @@ static inline v2g zoomVector(ZoomFilterFXWrapperData *data, float X, float Y)
             break;
             //case YONLY_MODE:
             break;
-        case KALEIDO_MODE:
-            /* le pli est applique apres (voir ci-dessous) : ici rien a
-             * ajouter au coef radial, l'effet est purement geometrique */
-            break;
         case SPEEDWAY_MODE:
             coefVitesse *= 4.0f * Y;
             break;
@@ -238,18 +245,15 @@ static inline v2g zoomVector(ZoomFilterFXWrapperData *data, float X, float Y)
         coefVitesse = -2.01f;
     if (coefVitesse > 2.01f)
         coefVitesse = 2.01f;
-    
-    vx = coefVitesse * X;
-    vy = coefVitesse * Y;
+    vx = coefVitesse * fx;
+    vy = coefVitesse * fy;
 
-    /* Kaleidoscope : compose le pli avec le zoom radial. Le noyau echantillonne
-     * la source en (X - vx) : ici on veut qu'il lise dans le secteur replie,
-     * tire par le zoom radial -> source = (1 - coef) * point replie. */
-    if (data->theMode == KALEIDO_MODE && data->kaleidoN > 0) {
-        float fx, fy;
-        kaleidoFold (data, X, Y, &fx, &fy);
-        vx = X - (1.0f - coefVitesse) * fx;
-        vy = Y - (1.0f - coefVitesse) * fy;
+    /* Kaleidoscope addon : deplacement du pli lui-meme. Le noyau
+     * echantillonne la source en (X - vx) : ajouter (X - fx) fait lire
+     * dans le secteur replie, la ou le mode de base a ete evalue. */
+    if (data->kaleidoEffect && data->kaleidoN > 0) {
+        vx += X - fx;
+        vy += Y - fy;
     }
     
     /* Amulette 2 */
@@ -270,18 +274,18 @@ static inline v2g zoomVector(ZoomFilterFXWrapperData *data, float X, float Y)
         vy += (((float)random()) / ((float)RAND_MAX) - 0.5f) / 50.0f;
     }
     
-    /* Hypercos */
+    /* Hypercos (evalue sur le point replie : symetrique pour l'addon) */
     if (data->hypercosEffect)
     {
-        vx += sin(Y*10.0f)/120.0f;
-        vy += sin(X*10.0f)/120.0f;
+        vx += sin(fy*10.0f)/120.0f;
+        vy += sin(fx*10.0f)/120.0f;
     }
-    
+
     /* H Plane */
-    if (data->hPlaneEffect) vx += Y * 0.0025f * data->hPlaneEffect;
-    
+    if (data->hPlaneEffect) vx += fy * 0.0025f * data->hPlaneEffect;
+
     /* V Plane */
-    if (data->vPlaneEffect) vy += X * 0.0025f * data->vPlaneEffect;
+    if (data->vPlaneEffect) vy += fx * 0.0025f * data->vPlaneEffect;
     
     /* TODO : Water Mode */
     //    if (data->waveEffect)
@@ -636,7 +640,11 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
         data->waveEffect = zf->waveEffect;
         data->hypercosEffect = zf->hypercosEffect;
         data->noisify = zf->noisify;
-        if (zf->foldCount != data->kaleidoN || zf->foldAngle != data->kaleidoAngle)
+        data->kaleidoEffect = zf->kaleidoEffect;
+        if (!data->kaleidoEffect) {
+            data->kaleidoN = 0;    /* desactive : le pli ne s'applique plus */
+        }
+        else if (zf->foldCount != data->kaleidoN || zf->foldAngle != data->kaleidoAngle)
             kaleidoPrecompute (data, zf->foldCount ? zf->foldCount : 4, zf->foldAngle);
         data->interlace_start = 0;
     }
@@ -821,6 +829,7 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     
     data->wave = data->wavesp = 0;
 
+    data->kaleidoEffect = 0;    /* addon inactif au demarrage */
     kaleidoPrecompute (data, 4, 0.0f);
     
     data->enabled_bp = secure_b_param("Enabled", 1);
