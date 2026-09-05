@@ -745,7 +745,9 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
     if (data->interlace_start>=0)
     {
         /* creation de la nouvelle destination */
-        makeZoomBufferStripe(data,resy/16);
+        /* Kaleidoscope actif : 4x moins de lignes par frame -> la pliure
+         * progresse sur ~64 frames au lieu de 16 (transition douce). */
+        makeZoomBufferStripe(data, data->kaleidoEffect ? resy/64 : resy/16);
     }
     
     if (switchIncr != 0) {
