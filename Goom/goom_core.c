@@ -230,6 +230,12 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
     
     /* par défaut pas de changement de zoom */
     pzfd = NULL;
+
+    /* Freeze : verrouille la config de zoom courante (plus de randomisation) */
+    {
+        PluginParameters *zfp = zoomFilterParams (goomInfo);
+        goomInfo->update.freezeOn = zfp && IVAL (*zfp->params[1]);
+    }
     
     /* 
         * Test forceMode
@@ -257,8 +263,8 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
             /* addon kaleidoscope : depart/arret tires independamment du mode */
             {
                 PluginParameters *zfp = zoomFilterParams (goomInfo);
-                int startProb = zfp ? IVAL (*zfp->params[2]) : 6;
-                int stopProb = zfp ? IVAL (*zfp->params[3]) : 4;
+                int startProb = zfp ? IVAL (*zfp->params[3]) : 6;
+                int stopProb = zfp ? IVAL (*zfp->params[4]) : 4;
                 if (!goomInfo->update.zoomFilterData.kaleidoEffect) {
                     if (goom_irand(goomInfo->gRandom,startProb) == 0) {
                         goomInfo->update.zoomFilterData.kaleidoEffect = 1;
@@ -357,7 +363,7 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
 	{
 		PluginParameters *zfp = zoomFilterParams (goomInfo);
 		if (zfp) {
-			int kaleidoMode = IVAL (*zfp->params[1]);
+			int kaleidoMode = IVAL (*zfp->params[2]);
 			if (kaleidoMode == 0)
 				goomInfo->update.zoomFilterData.kaleidoEffect = 0;
 			else if (kaleidoMode == 2)
@@ -660,6 +666,10 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
         }
 #endif
         
+        /* Freeze : aucun changement de config n'atteint le filtre */
+        if (goomInfo->update.freezeOn)
+            pzfd = NULL;
+
         /* Zoom here ! */
         zoomFilterFastRGB (goomInfo, goomInfo->p1, goomInfo->p2, pzfd, goomInfo->screen.width, goomInfo->screen.height,
                            goomInfo->update.switchIncr, goomInfo->update.switchMult);

@@ -127,6 +127,7 @@ struct _PLUGIN_INFO {
 	 * I took all static variables from goom_update and put them here.. for the moment.
 	 */
 	struct {
+		int freezeOn;              /* Freeze actif : plus de changement de config de zoom */
 		int lockvar;               /* pour empecher de nouveaux changements */
 		int goomvar;               /* boucle des gooms */
 		int loopvar;               /* mouvement des points */

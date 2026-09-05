@@ -97,6 +97,7 @@ static void generatePrecalCoef (int precalCoef[BUFFPOINTNB][BUFFPOINTNB]);
 typedef struct _ZOOM_FILTER_FX_WRAPPER_DATA {
     
     PluginParam enabled_bp;
+    PluginParam freeze_bp;
     PluginParameters params;
     /* writable kaleido controls */
     PluginParam kaleidoMode_p;
@@ -872,6 +873,8 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     
     data->enabled_bp = secure_b_param("Enabled", 1);
 
+    data->freeze_bp = secure_b_param("Freeze", 0);
+
     data->kaleidoMode_p = secure_i_param("Kaleido");
     IVAL(data->kaleidoMode_p) = 1;
     IMIN(data->kaleidoMode_p) = 0;
@@ -938,19 +941,20 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     IMAX(data->hypercosFx_p) = 1;
     ISTEP(data->hypercosFx_p) = 1;
 
-    data->params = plugin_parameters ("Zoom Filter", 12);
+    data->params = plugin_parameters ("Zoom Filter", 13);
     data->params.params[0] = &data->enabled_bp;
-    data->params.params[1] = &data->kaleidoMode_p;
-    data->params.params[2] = &data->kaleidoStartP_p;
-    data->params.params[3] = &data->kaleidoStopP_p;
-    data->params.params[4] = &data->zoomMode_p;
-    data->params.params[5] = &data->vitesse_p;
-    data->params.params[6] = &data->reverse_p;
-    data->params.params[7] = &data->middleX_p;
-    data->params.params[8] = &data->middleY_p;
-    data->params.params[9] = &data->noisify_p;
-    data->params.params[10] = &data->waveFx_p;
-    data->params.params[11] = &data->hypercosFx_p;
+    data->params.params[1] = &data->freeze_bp;
+    data->params.params[2] = &data->kaleidoMode_p;
+    data->params.params[3] = &data->kaleidoStartP_p;
+    data->params.params[4] = &data->kaleidoStopP_p;
+    data->params.params[5] = &data->zoomMode_p;
+    data->params.params[6] = &data->vitesse_p;
+    data->params.params[7] = &data->reverse_p;
+    data->params.params[8] = &data->middleX_p;
+    data->params.params[9] = &data->middleY_p;
+    data->params.params[10] = &data->noisify_p;
+    data->params.params[11] = &data->waveFx_p;
+    data->params.params[12] = &data->hypercosFx_p;
     
     _this->params = &data->params;
     _this->fx_data = (void*)data;
