@@ -371,12 +371,6 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
 		}
 	}
 
-    /* TEST (a retirer avant release) : forcer l'addon kaleido ON */
-    goomInfo->update.zoomFilterData.kaleidoEffect = 1;
-    if (goomInfo->update.zoomFilterData.foldCount == 0)
-        goomInfo->update.zoomFilterData.foldCount = 4;
-    goomInfo->update.zoomFilterData.middleX = goomInfo->screen.width / 2;
-    goomInfo->update.zoomFilterData.middleY = goomInfo->screen.height / 2;
         
         /* tout ceci ne sera fait qu'en cas de non-blocage */
         if (goomInfo->update.lockvar == 0) {
