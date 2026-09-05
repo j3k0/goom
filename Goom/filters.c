@@ -335,13 +335,22 @@ static void makeZoomBufferStripe(ZoomFilterFXWrapperData * data, int INTERLACE_I
             
             data->brutT[premul_y_prevX] = ((int)((X-vector.x)*inv_ratio)+((int)(data->middleX*BUFFPOINTNB)));
             data->brutT[premul_y_prevX+1] = ((int)((Y-vector.y)*inv_ratio)+((int)(data->middleY*BUFFPOINTNB)));
-            /* KALEIDO : les reflexions peuvent envoyer la source hors buffer
-             * cote negatif ; les noyaux ne testent que la borne superieure
-             * (px >= ax), donc on borne ici (les noyaux restent inchanges). */
-            if (data->brutT[premul_y_prevX] < 0)
-                data->brutT[premul_y_prevX] = 0;
-            if (data->brutT[premul_y_prevX+1] < 0)
-                data->brutT[premul_y_prevX+1] = 0;
+            /* Kaleidoscope : les reflexions peuvent envoyer la source hors
+             * buffer, et les noyaux ne testent que la borne superieure
+             * (px >= ax -> noir) : on borne des deux cotes pour garder les
+             * noyaux inchanges et eviter les trous noirs aux bords. */
+            {
+                int sx = data->brutT[premul_y_prevX];
+                int sy = data->brutT[premul_y_prevX+1];
+                int maxX = ((data->prevX - 1) << PERTEDEC) - 1;
+                int maxY = ((data->prevY - 1) << PERTEDEC) - 1;
+                if (sx < 0) sx = 0;
+                else if (sx > maxX) sx = maxX;
+                if (sy < 0) sy = 0;
+                else if (sy > maxY) sy = maxY;
+                data->brutT[premul_y_prevX] = sx;
+                data->brutT[premul_y_prevX+1] = sy;
+            }
             premul_y_prevX += 2;
             X += ratio;
         }
