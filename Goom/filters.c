@@ -764,6 +764,12 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
     goomInfo->methods.zoom_filter (data->prevX, data->prevY, pix1, pix2,
                                    data->brutS, data->brutD, data->buffratio, data->precalCoef);
 }
+int zoomFilterKaleidoActive (PluginInfo *goomInfo)
+{
+    ZoomFilterFXWrapperData *data = (ZoomFilterFXWrapperData*)goomInfo->zoomFilter_fx.fx_data;
+    return data->kaleidoEffect && data->kaleidoN > 0;
+}
+
 void zoomFilterGetVelocity (PluginInfo *goomInfo, float x, float y, float *vx, float *vy)
 {
     ZoomFilterFXWrapperData *data = (ZoomFilterFXWrapperData*)goomInfo->zoomFilter_fx.fx_data;

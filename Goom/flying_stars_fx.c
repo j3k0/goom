@@ -434,7 +434,8 @@ static void fs_apply(VisualFX *_this, Pixel *src, Pixel *dest, PluginInfo *info)
 		/* accelerate the particule with the zoom filter's transformation
 		 * buffer: relax its velocity towards the velocity of the image
 		 * content at its position */
-		if (flow_coupling > 0.0f) {
+		/* Kaleidoscope on : pas de couplage (champ discontinu aux plis) */
+		if (flow_coupling > 0.0f && !zoomFilterKaleidoActive (info)) {
 			float fvx, fvy;
 			zoomFilterGetVelocity (info, data->stars[i].x, data->stars[i].y, &fvx, &fvy);
 			
