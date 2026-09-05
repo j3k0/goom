@@ -890,7 +890,7 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     ISTEP(data->kaleidoMode_p) = 1;
 
     data->kaleidoStartP_p = secure_i_param("Kaleido Start 1/N");
-    IVAL(data->kaleidoStartP_p) = 6;
+    IVAL(data->kaleidoStartP_p) = 32;
     IMIN(data->kaleidoStartP_p) = 1;
     IMAX(data->kaleidoStartP_p) = 64;
     ISTEP(data->kaleidoStartP_p) = 1;

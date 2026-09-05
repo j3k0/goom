@@ -263,7 +263,7 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
             /* addon kaleidoscope : depart/arret tires independamment du mode */
             {
                 PluginParameters *zfp = zoomFilterParams (goomInfo);
-                int startProb = zfp ? IVAL (*zfp->params[3]) : 6;
+                int startProb = zfp ? IVAL (*zfp->params[3]) : 32;
                 int stopProb = zfp ? IVAL (*zfp->params[4]) : 4;
                 if (!goomInfo->update.zoomFilterData.kaleidoEffect) {
                     if (goom_irand(goomInfo->gRandom,startProb) == 0) {
