@@ -98,6 +98,19 @@ typedef struct _ZOOM_FILTER_FX_WRAPPER_DATA {
     
     PluginParam enabled_bp;
     PluginParameters params;
+    /* writable kaleido controls */
+    PluginParam kaleidoMode_p;
+    PluginParam kaleidoStartP_p;
+    PluginParam kaleidoStopP_p;
+    /* read-only monitors of the applied state */
+    PluginParam zoomMode_p;
+    PluginParam vitesse_p;
+    PluginParam reverse_p;
+    PluginParam middleX_p;
+    PluginParam middleY_p;
+    PluginParam noisify_p;
+    PluginParam waveFx_p;
+    PluginParam hypercosFx_p;
     
     unsigned int *coeffs, *freecoeffs;
     
@@ -614,6 +627,22 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
     
     if (!BVAL(data->enabled_bp)) return;
     
+    /* expose the live applied state to the control UI (read-only monitors) */
+    IVAL(data->zoomMode_p) = data->theMode;
+    {
+        int vitesse = (int)(data->general_speed * 128.0f) + 128;
+        if (data->reverse) vitesse = 256 - vitesse;
+        if (vitesse < 0) vitesse = 0;
+        if (vitesse > 255) vitesse = 255;
+        IVAL(data->vitesse_p) = vitesse;
+    }
+    IVAL(data->reverse_p) = data->reverse ? 1 : 0;
+    IVAL(data->middleX_p) = data->middleX;
+    IVAL(data->middleY_p) = data->middleY;
+    IVAL(data->noisify_p) = data->noisify;
+    IVAL(data->waveFx_p) = data->waveEffect ? 1 : 0;
+    IVAL(data->hypercosFx_p) = data->hypercosEffect ? 1 : 0;
+    
     /** changement de taille **/
     if ((data->prevX != resx) || (data->prevY != resy)) {
         data->prevX = resx;
@@ -842,9 +871,86 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     kaleidoPrecompute (data, 4, 0.0f);
     
     data->enabled_bp = secure_b_param("Enabled", 1);
-    
-    data->params = plugin_parameters ("Zoom Filter", 1);
+
+    data->kaleidoMode_p = secure_i_param("Kaleido");
+    IVAL(data->kaleidoMode_p) = 1;
+    IMIN(data->kaleidoMode_p) = 0;
+    IMAX(data->kaleidoMode_p) = 2;
+    ISTEP(data->kaleidoMode_p) = 1;
+
+    data->kaleidoStartP_p = secure_i_param("Kaleido Start 1/N");
+    IVAL(data->kaleidoStartP_p) = 6;
+    IMIN(data->kaleidoStartP_p) = 1;
+    IMAX(data->kaleidoStartP_p) = 64;
+    ISTEP(data->kaleidoStartP_p) = 1;
+
+    data->kaleidoStopP_p = secure_i_param("Kaleido Stop 1/N");
+    IVAL(data->kaleidoStopP_p) = 4;
+    IMIN(data->kaleidoStopP_p) = 1;
+    IMAX(data->kaleidoStopP_p) = 64;
+    ISTEP(data->kaleidoStopP_p) = 1;
+
+    data->zoomMode_p = secure_i_feedback("Zoom Mode");
+    IVAL(data->zoomMode_p) = 0;
+    IMIN(data->zoomMode_p) = 0;
+    IMAX(data->zoomMode_p) = 9;
+    ISTEP(data->zoomMode_p) = 1;
+
+    data->vitesse_p = secure_i_feedback("Vitesse");
+    IVAL(data->vitesse_p) = 128;
+    IMIN(data->vitesse_p) = 0;
+    IMAX(data->vitesse_p) = 255;
+    ISTEP(data->vitesse_p) = 1;
+
+    data->reverse_p = secure_i_feedback("Reverse");
+    IVAL(data->reverse_p) = 0;
+    IMIN(data->reverse_p) = 0;
+    IMAX(data->reverse_p) = 1;
+    ISTEP(data->reverse_p) = 1;
+
+    data->middleX_p = secure_i_feedback("Middle X");
+    IVAL(data->middleX_p) = 0;
+    IMIN(data->middleX_p) = 0;
+    IMAX(data->middleX_p) = 1000000;
+    ISTEP(data->middleX_p) = 1;
+
+    data->middleY_p = secure_i_feedback("Middle Y");
+    IVAL(data->middleY_p) = 0;
+    IMIN(data->middleY_p) = 0;
+    IMAX(data->middleY_p) = 1000000;
+    ISTEP(data->middleY_p) = 1;
+
+    data->noisify_p = secure_i_feedback("Noisify");
+    IVAL(data->noisify_p) = 2;
+    IMIN(data->noisify_p) = 0;
+    IMAX(data->noisify_p) = 2;
+    ISTEP(data->noisify_p) = 1;
+
+    data->waveFx_p = secure_i_feedback("Wave FX");
+    IVAL(data->waveFx_p) = 0;
+    IMIN(data->waveFx_p) = 0;
+    IMAX(data->waveFx_p) = 1;
+    ISTEP(data->waveFx_p) = 1;
+
+    data->hypercosFx_p = secure_i_feedback("Hypercos FX");
+    IVAL(data->hypercosFx_p) = 0;
+    IMIN(data->hypercosFx_p) = 0;
+    IMAX(data->hypercosFx_p) = 1;
+    ISTEP(data->hypercosFx_p) = 1;
+
+    data->params = plugin_parameters ("Zoom Filter", 12);
     data->params.params[0] = &data->enabled_bp;
+    data->params.params[1] = &data->kaleidoMode_p;
+    data->params.params[2] = &data->kaleidoStartP_p;
+    data->params.params[3] = &data->kaleidoStopP_p;
+    data->params.params[4] = &data->zoomMode_p;
+    data->params.params[5] = &data->vitesse_p;
+    data->params.params[6] = &data->reverse_p;
+    data->params.params[7] = &data->middleX_p;
+    data->params.params[8] = &data->middleY_p;
+    data->params.params[9] = &data->noisify_p;
+    data->params.params[10] = &data->waveFx_p;
+    data->params.params[11] = &data->hypercosFx_p;
     
     _this->params = &data->params;
     _this->fx_data = (void*)data;
