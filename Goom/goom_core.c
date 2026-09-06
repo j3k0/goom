@@ -258,28 +258,31 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
         || (forceMode > 0)
         || (goomInfo->update.cyclesSinceLastChange > TIME_BTW_CHG)) {
         
+        /* addon kaleidoscope : depart/arret tires a chaque ouverture de la
+         * fenetre (pas seulement sur les tirages de mode). Les params
+         * Start/Stop 1/N signifient reellement 1 chance sur N par tirage. */
+        {
+            PluginParameters *zfp = zoomFilterParams (goomInfo);
+            int startProb = zfp ? IVAL (*zfp->params[3]) : 112;
+            int stopProb = zfp ? IVAL (*zfp->params[4]) : 16;
+            if (!goomInfo->update.zoomFilterData.kaleidoEffect) {
+                if (goom_irand(goomInfo->gRandom,startProb) == 0) {
+                    goomInfo->update.zoomFilterData.kaleidoEffect = 1;
+                    goomInfo->update.zoomFilterData.foldCount =
+                        kaleidoFoldCounts[goom_irand(goomInfo->gRandom,4)];
+                    goomInfo->update.zoomFilterData.foldAngle = 0.0f;
+                    /* le pli tourne autour du milieu : le recentrer ici,
+                     * pas seulement au prochain goom */
+                    goomInfo->update.zoomFilterData.middleX = goomInfo->screen.width / 2;
+                    goomInfo->update.zoomFilterData.middleY = goomInfo->screen.height / 2;
+                }
+            }
+            else if (goom_irand(goomInfo->gRandom,stopProb) == 0)
+                goomInfo->update.zoomFilterData.kaleidoEffect = 0;
+        }
+
         /* changement eventuel de mode */
         if (goom_irand(goomInfo->gRandom,16) == 0) {
-            /* addon kaleidoscope : depart/arret tires independamment du mode */
-            {
-                PluginParameters *zfp = zoomFilterParams (goomInfo);
-                int startProb = zfp ? IVAL (*zfp->params[3]) : 32;
-                int stopProb = zfp ? IVAL (*zfp->params[4]) : 4;
-                if (!goomInfo->update.zoomFilterData.kaleidoEffect) {
-                    if (goom_irand(goomInfo->gRandom,startProb) == 0) {
-                        goomInfo->update.zoomFilterData.kaleidoEffect = 1;
-                        goomInfo->update.zoomFilterData.foldCount =
-                            kaleidoFoldCounts[goom_irand(goomInfo->gRandom,4)];
-                        goomInfo->update.zoomFilterData.foldAngle = 0.0f;
-                        /* le pli tourne autour du milieu : le recentrer ici,
-                         * pas seulement au prochain goom */
-                        goomInfo->update.zoomFilterData.middleX = goomInfo->screen.width / 2;
-                        goomInfo->update.zoomFilterData.middleY = goomInfo->screen.height / 2;
-                    }
-                }
-                else if (goom_irand(goomInfo->gRandom,stopProb) == 0)
-                    goomInfo->update.zoomFilterData.kaleidoEffect = 0;
-            }
             switch (goom_irand(goomInfo->gRandom,34)) {
                 case 0:
                 case 10:

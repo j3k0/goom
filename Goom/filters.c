@@ -688,7 +688,8 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
             + ((data->kaleidoEffect && (data->kaleidoAngle != zf->foldAngle)) ? 2 : 0);
         data->kaleidoEffect = zf->kaleidoEffect;
         if (!data->kaleidoEffect) {
-            data->kaleidoN = 0;    /* desactive : le pli ne s'applique plus */
+            data->kaleidoN = 0;      /* desactive : le pli ne s'applique plus */
+            data->kaleidoAngle = 0.0f;
         }
         else if (zf->foldCount != data->kaleidoN || zf->foldAngle != data->kaleidoAngle)
             kaleidoPrecompute (data, zf->foldCount ? zf->foldCount : 4, zf->foldAngle);
@@ -917,13 +918,13 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     ISTEP(data->kaleidoMode_p) = 1;
 
     data->kaleidoStartP_p = secure_i_param("Kaleido Start 1/N");
-    IVAL(data->kaleidoStartP_p) = 32;
+    IVAL(data->kaleidoStartP_p) = 112;
     IMIN(data->kaleidoStartP_p) = 1;
-    IMAX(data->kaleidoStartP_p) = 64;
+    IMAX(data->kaleidoStartP_p) = 256;
     ISTEP(data->kaleidoStartP_p) = 1;
 
     data->kaleidoStopP_p = secure_i_param("Kaleido Stop 1/N");
-    IVAL(data->kaleidoStopP_p) = 4;
+    IVAL(data->kaleidoStopP_p) = 16;
     IMIN(data->kaleidoStopP_p) = 1;
     IMAX(data->kaleidoStopP_p) = 64;
     ISTEP(data->kaleidoStopP_p) = 1;
