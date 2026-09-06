@@ -936,13 +936,13 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     ISTEP(data->kaleidoMode_p) = 1;
 
     data->kaleidoStartP_p = secure_i_param("Kaleido Start 1/N");
-    IVAL(data->kaleidoStartP_p) = 112;
+    IVAL(data->kaleidoStartP_p) = 60;
     IMIN(data->kaleidoStartP_p) = 1;
     IMAX(data->kaleidoStartP_p) = 256;
     ISTEP(data->kaleidoStartP_p) = 1;
 
     data->kaleidoStopP_p = secure_i_param("Kaleido Stop 1/N");
-    IVAL(data->kaleidoStopP_p) = 16;
+    IVAL(data->kaleidoStopP_p) = 63;
     IMIN(data->kaleidoStopP_p) = 1;
     IMAX(data->kaleidoStopP_p) = 64;
     ISTEP(data->kaleidoStopP_p) = 1;

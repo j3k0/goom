@@ -35,7 +35,8 @@
 /* kaleidoscope addon : fold counts the randomizer can pick, and the
  * probability (1-in-N) that the addon starts / stops on each
  * mode-change draw. Tune for taste. */
-static const int kaleidoFoldCounts[4] = { 3, 4, 6, 8 };
+#define nKaleidoFold 9
+static const int kaleidoFoldCounts[nKaleidoFold] = { 2, 3, 4, 5, 6, 7, 8, 13, 15 };
 
 /* locate the "Zoom Filter" param group (order of visuals is not fixed) */
 static PluginParameters *zoomFilterParams (PluginInfo *goomInfo) {
@@ -264,15 +265,15 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
         {
             PluginParameters *zfp = zoomFilterParams (goomInfo);
             int manual = zfp && BVAL (*zfp->params[13]);
-            int startProb = zfp ? IVAL (*zfp->params[3]) : 112;
-            int stopProb = zfp ? IVAL (*zfp->params[4]) : 16;
+            int startProb = zfp ? IVAL (*zfp->params[3]) : 60;
+            int stopProb = zfp ? IVAL (*zfp->params[4]) : 63;
             if (manual)
                 ;    /* mode manuel : le pli est pilote par les params */
             else if (!goomInfo->update.zoomFilterData.kaleidoEffect) {
                 if (goom_irand(goomInfo->gRandom,startProb) == 0) {
                     goomInfo->update.zoomFilterData.kaleidoEffect = 1;
                     goomInfo->update.zoomFilterData.foldCount =
-                        kaleidoFoldCounts[goom_irand(goomInfo->gRandom,4)];
+                        kaleidoFoldCounts[goom_irand(goomInfo->gRandom,nKaleidoFold)];
                     goomInfo->update.zoomFilterData.foldAngle =
                         1.2f + (3.1415f - 1.2f)
                         * (float)goom_irand(goomInfo->gRandom,1942) / 1941.0f;
@@ -552,7 +553,7 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
                          * dans [1.2, pi]. */
                         {
                             int curN = goomInfo->update.zoomFilterData.foldCount;
-                            int newN = kaleidoFoldCounts[goom_irand(goomInfo->gRandom,4)];
+                            int newN = kaleidoFoldCounts[goom_irand(goomInfo->gRandom,nKaleidoFold)];
                             if (newN * 2 <= curN)
                                 newN = curN / 2 > 0 ? curN / 2 : newN;
                             else if (newN >= curN * 2)
