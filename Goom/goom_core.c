@@ -35,9 +35,9 @@
 /* kaleidoscope addon : fold counts the randomizer can pick, and the
  * probability (1-in-N) that the addon starts / stops on each
  * mode-change draw. Tune for taste. */
-#define nKaleidoFold 12
+#define nKaleidoFold 11
 static const int kaleidoFoldCounts[nKaleidoFold] =
-    { 2, 3, 4, 5, 6, 7, 8, 13, 15, 21, 25, 37 };
+    { 2, 3, 4, 5, 6, 7, 8, 13, 15, 21, 25 };
 
 /* locate the "Zoom Filter" param group (order of visuals is not fixed) */
 static PluginParameters *zoomFilterParams (PluginInfo *goomInfo) {
