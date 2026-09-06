@@ -106,6 +106,9 @@ typedef struct _ZOOM_FILTER_FX_WRAPPER_DATA {
     PluginParam kaleidoManual_bp;
     PluginParam kaleidoManualN_p;
     PluginParam kaleidoManualAngle_p;
+    PluginParam blendBoostToggle_p;
+    PluginParam blendBoostN_p;
+    PluginParam blendBoostAngle_p;
     /* read-only monitors of the applied state */
     PluginParam zoomMode_p;
     PluginParam vitesse_p;
@@ -686,9 +689,14 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
          * pli change (bascule, re-sectorisation, rotation). Consumme
          * au swap de la nouvelle table (interlace_start == -1). */
         goomInfo->update.blendFilterFast =
-            ((data->kaleidoEffect != zf->kaleidoEffect) ? 5 : 0)
-            + ((data->kaleidoEffect && (data->kaleidoN != zf->foldCount)) ? 3 : 0)
-            + ((data->kaleidoEffect && (data->kaleidoAngle != zf->foldAngle)) ? 2 : 0);
+            ((data->kaleidoEffect != zf->kaleidoEffect)
+                ? IVAL (data->blendBoostToggle_p) : 0)
+            + ((data->kaleidoEffect && (data->kaleidoN != zf->foldCount))
+                ? IVAL (data->blendBoostN_p) : 0)
+            + ((data->kaleidoEffect && (data->kaleidoAngle != zf->foldAngle))
+                ? IVAL (data->blendBoostAngle_p) : 0);
+        if (goomInfo->update.blendFilterFast > 10)
+            goomInfo->update.blendFilterFast = 10;
         data->kaleidoEffect = zf->kaleidoEffect;
         if (!data->kaleidoEffect) {
             data->kaleidoN = 0;      /* desactive : le pli ne s'applique plus */
@@ -946,6 +954,24 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     FMAX(data->kaleidoManualAngle_p) = 3.14159f;
     FSTEP(data->kaleidoManualAngle_p) = 0.01f;
 
+    data->blendBoostToggle_p = secure_i_param("Blend Boost Toggle");
+    IVAL(data->blendBoostToggle_p) = 5;
+    IMIN(data->blendBoostToggle_p) = 0;
+    IMAX(data->blendBoostToggle_p) = 10;
+    ISTEP(data->blendBoostToggle_p) = 1;
+
+    data->blendBoostN_p = secure_i_param("Blend Boost N");
+    IVAL(data->blendBoostN_p) = 3;
+    IMIN(data->blendBoostN_p) = 0;
+    IMAX(data->blendBoostN_p) = 10;
+    ISTEP(data->blendBoostN_p) = 1;
+
+    data->blendBoostAngle_p = secure_i_param("Blend Boost Angle");
+    IVAL(data->blendBoostAngle_p) = 2;
+    IMIN(data->blendBoostAngle_p) = 0;
+    IMAX(data->blendBoostAngle_p) = 10;
+    ISTEP(data->blendBoostAngle_p) = 1;
+
     data->zoomMode_p = secure_i_feedback("Zoom Mode");
     IVAL(data->zoomMode_p) = 0;
     IMIN(data->zoomMode_p) = 0;
@@ -994,7 +1020,7 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     IMAX(data->hypercosFx_p) = 1;
     ISTEP(data->hypercosFx_p) = 1;
 
-    data->params = plugin_parameters ("Zoom Filter", 16);
+    data->params = plugin_parameters ("Zoom Filter", 19);
     data->params.params[0] = &data->enabled_bp;
     data->params.params[1] = &data->freeze_bp;
     data->params.params[2] = &data->kaleidoMode_p;
@@ -1011,6 +1037,9 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     data->params.params[13] = &data->kaleidoManual_bp;
     data->params.params[14] = &data->kaleidoManualN_p;
     data->params.params[15] = &data->kaleidoManualAngle_p;
+    data->params.params[16] = &data->blendBoostToggle_p;
+    data->params.params[17] = &data->blendBoostN_p;
+    data->params.params[18] = &data->blendBoostAngle_p;
     
     _this->params = &data->params;
     _this->fx_data = (void*)data;
