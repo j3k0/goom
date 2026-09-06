@@ -129,6 +129,9 @@ void plugin_info_init(PluginInfo *pp, int nbVisuals) {
 	pp->update.cyclesSinceLastChange = 0;
 	pp->update.drawLinesDuration = 80;
 	pp->update.lineMode= pp->update.drawLinesDuration;
+	pp->update.kaleidoManualOn = 0;
+	pp->update.kaleidoManualN = -1;
+	pp->update.kaleidoManualAngle = 0.0f;
 
 	pp->update.switchMultAmount = (29.0f/30.0f);
 	pp->update.switchIncrAmount = 0x7f;

@@ -128,6 +128,9 @@ struct _PLUGIN_INFO {
 	 */
 	struct {
 		int freezeOn;              /* Freeze actif : plus de changement de config de zoom */
+		int kaleidoManualOn;       /* dernier etat connu du mode manuel */
+		int kaleidoManualN;        /* dernier N manuel delivre au filtre */
+		float kaleidoManualAngle;  /* dernier angle manuel delivre au filtre */
 		int blendFilterFast;       /* boost de vitesse de transition (0..10, 0 = aucun) */
 		int lockvar;               /* pour empecher de nouveaux changements */
 		int goomvar;               /* boucle des gooms */

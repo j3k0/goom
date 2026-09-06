@@ -103,6 +103,9 @@ typedef struct _ZOOM_FILTER_FX_WRAPPER_DATA {
     PluginParam kaleidoMode_p;
     PluginParam kaleidoStartP_p;
     PluginParam kaleidoStopP_p;
+    PluginParam kaleidoManual_bp;
+    PluginParam kaleidoManualN_p;
+    PluginParam kaleidoManualAngle_p;
     /* read-only monitors of the applied state */
     PluginParam zoomMode_p;
     PluginParam vitesse_p;
@@ -929,6 +932,20 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     IMAX(data->kaleidoStopP_p) = 64;
     ISTEP(data->kaleidoStopP_p) = 1;
 
+    data->kaleidoManual_bp = secure_b_param("Kaleido Manual", 0);
+
+    data->kaleidoManualN_p = secure_i_param("Kaleido N");
+    IVAL(data->kaleidoManualN_p) = 6;
+    IMIN(data->kaleidoManualN_p) = 2;
+    IMAX(data->kaleidoManualN_p) = 16;
+    ISTEP(data->kaleidoManualN_p) = 1;
+
+    data->kaleidoManualAngle_p = secure_f_param("Kaleido Angle");
+    FVAL(data->kaleidoManualAngle_p) = 0.0f;
+    FMIN(data->kaleidoManualAngle_p) = -3.14159f;
+    FMAX(data->kaleidoManualAngle_p) = 3.14159f;
+    FSTEP(data->kaleidoManualAngle_p) = 0.01f;
+
     data->zoomMode_p = secure_i_feedback("Zoom Mode");
     IVAL(data->zoomMode_p) = 0;
     IMIN(data->zoomMode_p) = 0;
@@ -977,7 +994,7 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     IMAX(data->hypercosFx_p) = 1;
     ISTEP(data->hypercosFx_p) = 1;
 
-    data->params = plugin_parameters ("Zoom Filter", 13);
+    data->params = plugin_parameters ("Zoom Filter", 16);
     data->params.params[0] = &data->enabled_bp;
     data->params.params[1] = &data->freeze_bp;
     data->params.params[2] = &data->kaleidoMode_p;
@@ -991,6 +1008,9 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     data->params.params[10] = &data->noisify_p;
     data->params.params[11] = &data->waveFx_p;
     data->params.params[12] = &data->hypercosFx_p;
+    data->params.params[13] = &data->kaleidoManual_bp;
+    data->params.params[14] = &data->kaleidoManualN_p;
+    data->params.params[15] = &data->kaleidoManualAngle_p;
     
     _this->params = &data->params;
     _this->fx_data = (void*)data;

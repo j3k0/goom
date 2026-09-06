@@ -263,9 +263,12 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
          * Start/Stop 1/N signifient reellement 1 chance sur N par tirage. */
         {
             PluginParameters *zfp = zoomFilterParams (goomInfo);
+            int manual = zfp && BVAL (*zfp->params[13]);
             int startProb = zfp ? IVAL (*zfp->params[3]) : 112;
             int stopProb = zfp ? IVAL (*zfp->params[4]) : 16;
-            if (!goomInfo->update.zoomFilterData.kaleidoEffect) {
+            if (manual)
+                ;    /* mode manuel : le pli est pilote par les params */
+            else if (!goomInfo->update.zoomFilterData.kaleidoEffect) {
                 if (goom_irand(goomInfo->gRandom,startProb) == 0) {
                     goomInfo->update.zoomFilterData.kaleidoEffect = 1;
                     goomInfo->update.zoomFilterData.foldCount =
@@ -362,7 +365,9 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
         }
     }
 
-	/* addon kaleidoscope : mode force par l'UI (0 = off, 1 = auto, 2 = on) */
+	/* addon kaleidoscope : mode force par l'UI (0 = off, 1 = auto, 2 = on).
+	 * Mode manuel : N et l'angle viennent des params, la randomisation du
+	 * pli est desactivee plus bas. */
 	{
 		PluginParameters *zfp = zoomFilterParams (goomInfo);
 		if (zfp) {
@@ -371,6 +376,14 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
 				goomInfo->update.zoomFilterData.kaleidoEffect = 0;
 			else if (kaleidoMode == 2)
 				goomInfo->update.zoomFilterData.kaleidoEffect = 1;
+			else if (BVAL (*zfp->params[13])) {
+				/* manuel : pli permanent pilote par les params */
+				goomInfo->update.zoomFilterData.kaleidoEffect = 1;
+				goomInfo->update.zoomFilterData.foldCount =
+					IVAL (*zfp->params[14]);
+				goomInfo->update.zoomFilterData.foldAngle =
+					FVAL (*zfp->params[15]);
+			}
 		}
 	}
 
@@ -526,8 +539,11 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
                     }
 
                     /* kaleidoscope addon : rotation du eventail et
-                     * re-sectorisation sur les gooms (comme la vitesse) */
-                    if (goomInfo->update.zoomFilterData.kaleidoEffect) {
+                     * re-sectorisation sur les gooms (comme la vitesse).
+                     * Pas en mode manuel : le pli vient des params. */
+                    if (goomInfo->update.zoomFilterData.kaleidoEffect
+                        && !(zoomFilterParams (goomInfo)
+                             && BVAL (*zoomFilterParams (goomInfo)->params[13]))) {
                         if (goom_irand(goomInfo->gRandom,4) == 0)
                             goomInfo->update.zoomFilterData.foldCount =
                                 kaleidoFoldCounts[goom_irand(goomInfo->gRandom,4)];
@@ -666,6 +682,30 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
         /* Freeze : aucun changement de config n'atteint le filtre */
         if (goomInfo->update.freezeOn)
             pzfd = NULL;
+
+        /* Mode manuel : on ne delivre la config qu'au changement (N, angle,
+         * bascule marche/arret). Une livraison chaque frame poserait
+         * interlace_start a 0 en permanence : la machine a etats du filtre
+         * n'atteindrait jamais -1, la nouvelle table de pli ne serait jamais
+         * swappee (le filtre resterait visuellement sur l'ancien pli). */
+        {
+            PluginParameters *zfp2 = zoomFilterParams (goomInfo);
+            if (zfp2 && BVAL (*zfp2->params[13])) {
+                int manN = IVAL (*zfp2->params[14]);
+                float manA = FVAL (*zfp2->params[15]);
+                if (!goomInfo->update.kaleidoManualOn
+                    || manN != goomInfo->update.kaleidoManualN
+                    || manA != goomInfo->update.kaleidoManualAngle) {
+                    goomInfo->update.kaleidoManualOn = 1;
+                    goomInfo->update.kaleidoManualN = manN;
+                    goomInfo->update.kaleidoManualAngle = manA;
+                    pzfd = &goomInfo->update.zoomFilterData;
+                }
+            }
+            else if (goomInfo->update.kaleidoManualOn) {
+                goomInfo->update.kaleidoManualOn = 0;
+            }
+        }
 
         /* Zoom here ! */
         zoomFilterFastRGB (goomInfo, goomInfo->p1, goomInfo->p2, pzfd, goomInfo->screen.width, goomInfo->screen.height,
