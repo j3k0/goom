@@ -41,6 +41,8 @@ enum {
 
 typedef struct _TENTACLE_FX_DATA {
 	PluginParam enabled_bp;
+	PluginParam show_always_bp;
+	PluginParam shape_p;
 	PluginParam flow_coupling_p;
 	PluginParam fade_p;
 	PluginParameters params;
@@ -67,6 +69,9 @@ typedef struct _TENTACLE_FX_DATA {
 	int lock;
 	int prevDrawit;
 	int mode;
+	int shape;
+	int lastShapeReq; /* derniere valeur lue du param Shape, pour detecter un changement en cours de show */
+	int palCycle;     /* cycle de palette type IFS : deplace les octets de couleur */
 } TentacleFXData;
 
 static void tentacle_new (TentacleFXData *data);
@@ -94,11 +99,18 @@ static void tentacle_fx_init(VisualFX *_this, PluginInfo *info) {
 	IMIN(data->fade_p) = 0;
 	IMAX(data->fade_p) = 100;
 	ISTEP(data->fade_p) = 1;
-	data->params = plugin_parameters ("3D Tentacles", 3);
+	data->shape_p = secure_i_param ("Shape (0=Auto 1=Tentacles 2=Ripple 3=Tunnel)");
+	IVAL(data->shape_p) = 0;
+	IMIN(data->shape_p) = 0;
+	IMAX(data->shape_p) = 3;
+	ISTEP(data->shape_p) = 1;
+	data->show_always_bp = secure_b_param ("Always Show", 0);
+	data->params = plugin_parameters ("3D Tentacles", 5);
 	data->params.params[0] = &data->enabled_bp;
-	data->params.params[1] = &data->flow_coupling_p;
-	data->params.params[2] = &data->fade_p;
-
+	data->params.params[1] = &data->show_always_bp;
+	data->params.params[2] = &data->shape_p;
+	data->params.params[3] = &data->flow_coupling_p;
+	data->params.params[4] = &data->fade_p;
 	data->cycle = 0.0f;
 	data->col = (0x28<<(ROUGE*8))|(0x2c<<(VERT*8))|(0x5f<<(BLEU*8));
 	data->dstcol = 0;
@@ -115,6 +127,9 @@ static void tentacle_fx_init(VisualFX *_this, PluginInfo *info) {
 	data->lock = 0;
 	data->prevDrawit = 0;
 	data->mode = TENTACLE_MODE_CLASSIC;
+	data->shape = GRID3D_SHAPE_TENTACLE;
+	data->lastShapeReq = 0;
+	data->palCycle = 0;
 	data->colors[0] = (0x18<<(ROUGE*8))|(0x4c<<(VERT*8))|(0x2f<<(BLEU*8));
 	data->colors[1] = (0x48<<(ROUGE*8))|(0x2c<<(VERT*8))|(0x6f<<(BLEU*8));
 	data->colors[2] = (0x58<<(ROUGE*8))|(0x3c<<(VERT*8))|(0x0f<<(BLEU*8));
@@ -128,12 +143,17 @@ static void tentacle_fx_init(VisualFX *_this, PluginInfo *info) {
 static void tentacle_fx_apply(VisualFX *_this, Pixel *src, Pixel *dest, PluginInfo *goomInfo)
 {
   TentacleFXData *data = (TentacleFXData*)_this->fx_data;
-  if (BVAL(data->enabled_bp)) {
-    tentacle_update(goomInfo, dest, src, goomInfo->screen.width,
-                    goomInfo->screen.height, goomInfo->sound.samples,
-                    (float)goomInfo->sound.accelvar,
-                    goomInfo->curGState->drawTentacle, data);
+  if (!BVAL(data->enabled_bp)) {
+    /* disabled : le dernier etat prevDrawit ne doit pas survivre, sinon
+     * le retablisement ne produira pas de front montant au prochain show */
+    data->prevDrawit = 0;
+    return;
   }
+  tentacle_update(goomInfo, dest, src, goomInfo->screen.width,
+                  goomInfo->screen.height, goomInfo->sound.samples,
+                  (float)goomInfo->sound.accelvar,
+                  goomInfo->curGState->drawTentacle
+                    || BVAL(data->show_always_bp), data);
 }
 
 static void tentacle_fx_free(VisualFX *_this) {
@@ -319,18 +339,45 @@ static void tentacle_update(PluginInfo *goomInfo, Pixel *buf, Pixel *back, int W
 	float soundFactor;
 	float surge;
 	float rapportBase;
-
-	/* Rebuild the grids with fresh random density each time the tentacle
-	 * shows (rising edge of drawit), and pick the mode to run. */
-	if (drawit && !fx_data->prevDrawit) {
-		tentacle_recreate(fx_data);
+	/* Resolu a chaque front montant de drawit ET a chaque changement du
+	 * param Shape en cours de show : la forme demandee s'applique au
+	 * prochain affichage, meme si l'effet est deja visible (Always Show).
+	 * WAVE mode suppose le rideau spectral : garde uniquement pour la
+	 * forme tentacule. */
+	{
+		int shapeReq = IVAL(fx_data->shape_p);
+		if ((drawit && !fx_data->prevDrawit) || (shapeReq != fx_data->lastShapeReq)) {
+			int newShape;
+			if (drawit && !fx_data->prevDrawit) {
+				tentacle_recreate(fx_data);
+				/* front montant : tirage auto ou forme demandee */
+				newShape = (shapeReq == 0)
+					? goom_irand(goomInfo->gRandom, GRID3D_SHAPE_COUNT)
+					: shapeReq - 1;
+			}
+			else {
+				/* changement de param en cours de show : grille
+				 * conservee, seule la forme change */
+				newShape = (shapeReq == 0)
+					? fx_data->shape
+					: shapeReq - 1;
+			}
+			fx_data->lastShapeReq = shapeReq;
+			if (newShape != fx_data->shape) {
+				fx_data->shape = newShape;
+				if (fx_data->shape != GRID3D_SHAPE_TENTACLE)
+					fx_data->mode = TENTACLE_MODE_CLASSIC;
+			}
+		}
 		/* mix the modes: WAVE is more likely on fast music */
-		if (goomInfo->sound.speedvar > TENTACLE_SPEED_THRESHOLD)
-			fx_data->mode = (goom_irand(goomInfo->gRandom,100) < TENTACLE_WAVE_PROB_FAST)
-				? TENTACLE_MODE_WAVE : TENTACLE_MODE_CLASSIC;
-		else
-			fx_data->mode = (goom_irand(goomInfo->gRandom,100) < TENTACLE_WAVE_PROB_SLOW)
-				? TENTACLE_MODE_WAVE : TENTACLE_MODE_CLASSIC;
+		if ((drawit && !fx_data->prevDrawit) && (fx_data->shape == GRID3D_SHAPE_TENTACLE)) {
+			if (goomInfo->sound.speedvar > TENTACLE_SPEED_THRESHOLD)
+				fx_data->mode = (goom_irand(goomInfo->gRandom,100) < TENTACLE_WAVE_PROB_FAST)
+					? TENTACLE_MODE_WAVE : TENTACLE_MODE_CLASSIC;
+			else
+				fx_data->mode = (goom_irand(goomInfo->gRandom,100) < TENTACLE_WAVE_PROB_SLOW)
+					? TENTACLE_MODE_WAVE : TENTACLE_MODE_CLASSIC;
+		}
 	}
 	fx_data->prevDrawit = drawit;
 
@@ -400,8 +447,27 @@ static void tentacle_update(PluginInfo *goomInfo, Pixel *buf, Pixel *back, int W
 				float val = (float)(ShiftRight(data[0][(tmp2 * 512) / gridCols],10)) * rapport;
 				fx_data->vals[tmp2] += TENTACLE_WAVE_SMOOTH * (val - fx_data->vals[tmp2]);
 			}
-			for (tmp=0;tmp<nbgrid;tmp++)
+			for (tmp=0;tmp<nbgrid;tmp++) {
+				/* la forme de la grille suit toujours la forme courante
+				 * (une grille recreee garde GRID3D_SHAPE_TENTACLE) */
+				fx_data->grille[tmp]->shape = fx_data->shape;
 				grid3d_update (fx_data->grille[tmp], rotangle, fx_data->vals, dist2);
+			}
+		}
+		else if (fx_data->shape != GRID3D_SHAPE_TENTACLE) {
+			/* ripple/tunnel : echantillonne la forme d'onde sur toute la
+			 * largeur (valeurs signees : pousse vers l'exterieur en
+			 * compression, vers l'interieur en depression), lissee
+			 * temporellement et partagee par toutes les grilles */
+			int gridCols = fx_data->grille[0]->defx;
+			for (tmp2=0;tmp2<gridCols;tmp2++) {
+				float val = (float)(ShiftRight(data[0][(tmp2 * 512) / gridCols],10)) * rapport;
+				fx_data->vals[tmp2] += TENTACLE_WAVE_SMOOTH * (val - fx_data->vals[tmp2]);
+			}
+			for (tmp=0;tmp<nbgrid;tmp++) {
+				fx_data->grille[tmp]->shape = fx_data->shape;
+				grid3d_update (fx_data->grille[tmp], rotangle, fx_data->vals, dist2);
+			}
 		}
 		else {
 			/* classic keeps an independent random waveform per grid */
@@ -409,6 +475,7 @@ static void tentacle_update(PluginInfo *goomInfo, Pixel *buf, Pixel *back, int W
 				int gridCols = fx_data->grille[tmp]->defx;
 				for (tmp2=0;tmp2<gridCols;tmp2++)
 					fx_data->vals[tmp2] = (float)(ShiftRight(data[0][goom_irand(goomInfo->gRandom,511)],10)) * rapport;
+				fx_data->grille[tmp]->shape = fx_data->shape;
 				grid3d_update (fx_data->grille[tmp], rotangle, fx_data->vals, dist2);
 			}
 		}
@@ -419,6 +486,28 @@ static void tentacle_update(PluginInfo *goomInfo, Pixel *buf, Pixel *back, int W
 		flow = zoomFilterKaleidoActive (goomInfo)
 			? 0.0f
 			: (float)IVAL(fx_data->flow_coupling_p) / 100.0f * TENTACLE_FLOW_FORCE;
+		/* les formes en surface tracent deux fois plus de segments que
+		 * les tentacules (colonnes + rangees) : en mode add, ca sature
+		 * vite. Palette tournante type IFS : rampes triangulaires
+		 * cycle10 0..3..0 qui deplacent les octets vers le sombre,
+		 * et un demi-coefficient global. */
+		if (fx_data->shape != GRID3D_SHAPE_TENTACLE) {
+			int cycle10;
+			unsigned char *cb = (unsigned char *)&color;
+			unsigned char *cl = (unsigned char *)&colorlow;
+			int k;
+			fx_data->palCycle++;
+			if (fx_data->palCycle >= 80)
+				fx_data->palCycle = 0;
+			if (fx_data->palCycle < 40)
+				cycle10 = fx_data->palCycle / 10;
+			else
+				cycle10 = 7 - fx_data->palCycle / 10;
+			for (k=0;k<4;k++) {
+				cb[k] = (unsigned char)(cb[k] >> cycle10) >> 1;
+				cl[k] = (unsigned char)(cl[k] >> cycle10) >> 1;
+			}
+		}
 		fx_data->cycle+=0.01f;
 		for (tmp=0;tmp<nbgrid;tmp++)
 			grid3d_draw (goomInfo, fx_data->grille[tmp],color,colorlow,dist,flow,buf,back,W,H);

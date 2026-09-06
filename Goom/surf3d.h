@@ -21,8 +21,18 @@ typedef struct {
 	int defz;
 	int sizez;
 	int mode;
+	int shape;
+	float phase; /* temps propre de la forme, avance a chaque update */
 	v2d *proj; /* persistent projection buffer, sized surf.nbvertex */
 } grid3d;
+
+/* forme du deplacement : quelle loi anime les sommets dans grid3d_update */
+enum {
+	GRID3D_SHAPE_TENTACLE = 0, /* rideau spectral avec propagation amortie */
+	GRID3D_SHAPE_RIPPLE,       /* onde radiale stationnaire sur la feuille */
+	GRID3D_SHAPE_TUNNEL,       /* feuille enroulee en tube rotatif */
+	GRID3D_SHAPE_COUNT
+};
 
 /* hi-level */
 

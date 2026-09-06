@@ -3,6 +3,7 @@
 #include "goom_plugin_info.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 
 grid3d *grid3d_new (int sizex, int defx, int sizez, int defz, v3d center) {
@@ -20,7 +21,8 @@ grid3d *grid3d_new (int sizex, int defx, int sizez, int defz, v3d center) {
 	g->sizex=sizex;
 	g->defz=defz;
 	g->sizez=sizez;
-	g->mode=0;
+	g->shape=GRID3D_SHAPE_TENTACLE;
+	g->phase=0.0f;
 
 	while (y) {
 		--y;
@@ -75,6 +77,55 @@ void grid3d_draw (PluginInfo *plug, grid3d *g, int color, int colorlow,
 			v2x = v2;
 		}
 	}
+
+	/* les formes en surface (ripple, tunnel) tracent aussi la direction
+	 * x : les anneaux et les fronts d'onde sont orientes selon x, la
+	 * colonne seule les ferait passer pour des tentacules */
+	if (g->shape != GRID3D_SHAPE_TENTACLE) {
+		int z, x2;
+		for (z=0;z<g->defz;z++) {
+			v2x = v2_array[z*g->defx];
+			if ((flow != 0.0f)
+					&& (v2x.x != -666) && (v2x.y != -666)) {
+				float fvx, fvy;
+				zoomFilterGetVelocity (plug, v2x.x, v2x.y, &fvx, &fvy);
+				v2x.x += fvx * flow;
+				v2x.y += fvy * flow;
+			}
+			for (x2=1;x2<g->defx;x2++) {
+				v2 = v2_array[z*g->defx + x2];
+				if ((flow != 0.0f)
+						&& ((v2.x != -666) || (v2.y != -666))) {
+					float fvx, fvy;
+					zoomFilterGetVelocity (plug, v2.x, v2.y, &fvx, &fvy);
+					v2.x += fvx * flow;
+					v2.y += fvy * flow;
+				}
+				if (((v2.x != -666) || (v2.y!=-666))
+						&& ((v2x.x != -666) || (v2x.y!=-666))) {
+					plug->methods.draw_line (buf,v2x.x,v2x.y,v2.x,v2.y, colorlow, W, H);
+					plug->methods.draw_line (back,v2x.x,v2x.y,v2.x,v2.y, color, W, H);
+				}
+				v2x = v2;
+			}
+			/* fermer l'anneau : relier le dernier point au premier,
+			 * sinon le tube reste ouvert entre gx=defx-1 et gx=0 */
+			if (g->shape == GRID3D_SHAPE_TUNNEL) {
+				v2 = v2_array[z*g->defx];
+				if ((v2.x != -666) || (v2.y != -666)) {
+					float fvx, fvy;
+					zoomFilterGetVelocity (plug, v2.x, v2.y, &fvx, &fvy);
+					v2.x += fvx * flow;
+					v2.y += fvy * flow;
+				}
+				if (((v2.x != -666) || (v2.y!=-666))
+						&& ((v2x.x != -666) || (v2x.y!=-666))) {
+					plug->methods.draw_line (buf,v2x.x,v2x.y,v2.x,v2.y, colorlow, W, H);
+					plug->methods.draw_line (back,v2x.x,v2x.y,v2.x,v2.y, color, W, H);
+				}
+			}
+		}
+	}
 }
 
 void surf3d_rotate (surf3d *s, float angle) {
@@ -106,7 +157,66 @@ void grid3d_update (grid3d *g, float angle, float *vals, float dist) {
 	cam.y += sina*2.0f;
 	SINCOS(angle,sina,cosa);
 
-	if (g->mode==0) {
+	if (g->shape == GRID3D_SHAPE_RIPPLE) {
+		/* onde radiale qui se propage depuis le centre de la feuille :
+		 * recompute la position de base a partir de la grille (sizex/
+		 * sizez) et non des vertex, sinon la frame precedante pollue
+		 * la suivante ; la phase avance a chaque update */
+		float halfx = (float)g->sizex * 0.5f;
+		float halfz = (float)g->sizez * 0.5f;
+		for (i=0;i<s->nbvertex;i++) {
+			int gx = i % g->defx;
+			int gz = i / g->defx;
+			float dx = (float)(gx - g->defx/2) / g->defx * g->sizex;
+			float dz = (float)(gz - g->defz/2) / g->defz * g->sizez;
+			float r = sqrtf(dx*dx + dz*dz) / (halfx + halfz) * 2.0f;
+			s->vertex[i].x = dx;
+			s->vertex[i].z = dz;
+			/* hauteur pilotee par la forme d'onde (signee) de la colonne :
+			 * la surface suit la musique au lieu d'un simple gain global */
+			float amp = vals ? vals[gx] : 0.0f;
+			s->vertex[i].y = amp * sinf(r*6.0f - g->phase) * expf(-r*1.2f);
+		}
+	}
+	else if (g->shape == GRID3D_SHAPE_TUNNEL) {
+		/* tunnel : anneaux perpendiculaires a l'axe z (l'axe de vue),
+		 * empiles en profondeur avec un leger cone. Pre-rotation par
+		 * -angle : la boucle commune reapplique +angle, le tunnel reste
+		 * ainsi aligne sur la vue au lieu de basculer sur le cote ; il
+		 * tourne autour de son propre axe via phase. Centre des anneaux
+		 * sur l'axe de vue : -cam.y annule la translation. */
+		/* displacement radial par colonne depuis la forme d'onde
+		 * (signee) : le tunnel respire avec la musique ; rayon borne
+		 * pour ne pas traverser l'axe */
+		float cy = -cam.y;
+		float cz = -cam.z;
+		for (i=0;i<s->nbvertex;i++) {
+			int gx = i % g->defx;
+			int gz = i / g->defx;
+			/* cible en espace vue : anneau de rayon croissant (cone)
+			 * centre sur l'axe, profond en z, tourne par phase */
+			float theta = ((float)gx + 0.5f) / g->defx * 6.2832f + g->phase;
+			float tz = 30.0f + ((float)gz + 0.5f) / g->defz * 120.0f;
+			float tr = 35.0f + tz * 0.10f;
+			if (vals)
+				tr += vals[gx];
+			if (tr < 8.0f)
+				tr = 8.0f;
+			float tx = tr * cosf(theta);
+			float tyy = tr * sinf(theta);
+			/* svertex = R(b)*vertex + cam ou b = pi/2 - angle (le site
+			 * d'appel Y_ROTATE_V3D passe cosa,sina inverses). Pour poser
+			 * svertex = cible : vertex = R(-b)*(cible - cam), le tunnel
+			 * reste coaxial quelle que soit la rotation camera */
+			float dx = tx;
+			float dyy = tyy + cy;
+			float dz = tz + cz;
+			s->vertex[i].x = dx * sina + dz * cosa;
+			s->vertex[i].y = dyy;
+			s->vertex[i].z = -dx * cosa + dz * sina;
+		}
+	}
+	else if (g->mode==0) {
 		if (vals)
 			for (i=0;i<g->defx;i++)
 				s->vertex[i].y = s->vertex[i].y*0.2 + vals[i]*0.8;
@@ -116,6 +226,9 @@ void grid3d_update (grid3d *g, float angle, float *vals, float dist) {
 			s->vertex[i].y += (s->vertex[i-g->defx].y * 0.777f);
 		}
 	}
+
+	if (g->shape != GRID3D_SHAPE_TENTACLE)
+		g->phase += 0.04f;
 
 	for (i=0;i<s->nbvertex;i++) {
 		Y_ROTATE_V3D(s->vertex[i],s->svertex[i],cosa,sina);
