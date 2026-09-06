@@ -962,7 +962,7 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
     FSTEP(data->kaleidoManualAngle_p) = 0.01f;
 
     data->blendBoostToggle_p = secure_i_param("Blend Boost Toggle");
-    IVAL(data->blendBoostToggle_p) = 2;
+    IVAL(data->blendBoostToggle_p) = 5;
     IMIN(data->blendBoostToggle_p) = 0;
     IMAX(data->blendBoostToggle_p) = 10;
     ISTEP(data->blendBoostToggle_p) = 1;
