@@ -691,9 +691,16 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
         goomInfo->update.blendFilterFast =
             ((data->kaleidoEffect != zf->kaleidoEffect)
                 ? IVAL (data->blendBoostToggle_p) : 0)
-            + ((data->kaleidoEffect && (data->kaleidoN != zf->foldCount))
+            + ((data->kaleidoEffect && (data->kaleidoN != zf->foldCount)
+                && ((data->kaleidoN > zf->foldCount
+                        ? data->kaleidoN - zf->foldCount
+                        : zf->foldCount - data->kaleidoN) > 1
+                    || zf->foldCount < 4))
                 ? IVAL (data->blendBoostN_p) : 0)
-            + ((data->kaleidoEffect && (data->kaleidoAngle != zf->foldAngle))
+            + ((data->kaleidoEffect && (data->kaleidoAngle != zf->foldAngle)
+                && ((data->kaleidoAngle > zf->foldAngle
+                        ? data->kaleidoAngle - zf->foldAngle
+                        : zf->foldAngle - data->kaleidoAngle) > 0.1f))
                 ? IVAL (data->blendBoostAngle_p) : 0);
         if (goomInfo->update.blendFilterFast > 10)
             goomInfo->update.blendFilterFast = 10;
@@ -950,24 +957,24 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
 
     data->kaleidoManualAngle_p = secure_f_param("Kaleido Angle");
     FVAL(data->kaleidoManualAngle_p) = 0.0f;
-    FMIN(data->kaleidoManualAngle_p) = -3.14159f;
-    FMAX(data->kaleidoManualAngle_p) = 3.14159f;
+    FMIN(data->kaleidoManualAngle_p) = 1.2f;
+    FMAX(data->kaleidoManualAngle_p) = 3.1415f;
     FSTEP(data->kaleidoManualAngle_p) = 0.01f;
 
     data->blendBoostToggle_p = secure_i_param("Blend Boost Toggle");
-    IVAL(data->blendBoostToggle_p) = 5;
+    IVAL(data->blendBoostToggle_p) = 2;
     IMIN(data->blendBoostToggle_p) = 0;
     IMAX(data->blendBoostToggle_p) = 10;
     ISTEP(data->blendBoostToggle_p) = 1;
 
     data->blendBoostN_p = secure_i_param("Blend Boost N");
-    IVAL(data->blendBoostN_p) = 3;
+    IVAL(data->blendBoostN_p) = 1;
     IMIN(data->blendBoostN_p) = 0;
     IMAX(data->blendBoostN_p) = 10;
     ISTEP(data->blendBoostN_p) = 1;
 
     data->blendBoostAngle_p = secure_i_param("Blend Boost Angle");
-    IVAL(data->blendBoostAngle_p) = 2;
+    IVAL(data->blendBoostAngle_p) = 1;
     IMIN(data->blendBoostAngle_p) = 0;
     IMAX(data->blendBoostAngle_p) = 10;
     ISTEP(data->blendBoostAngle_p) = 1;

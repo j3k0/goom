@@ -273,7 +273,9 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
                     goomInfo->update.zoomFilterData.kaleidoEffect = 1;
                     goomInfo->update.zoomFilterData.foldCount =
                         kaleidoFoldCounts[goom_irand(goomInfo->gRandom,4)];
-                    goomInfo->update.zoomFilterData.foldAngle = 0.0f;
+                    goomInfo->update.zoomFilterData.foldAngle =
+                        1.2f + (3.1415f - 1.2f)
+                        * (float)goom_irand(goomInfo->gRandom,1942) / 1941.0f;
                     /* le pli tourne autour du milieu : le recentrer ici,
                      * pas seulement au prochain goom */
                     goomInfo->update.zoomFilterData.middleX = goomInfo->screen.width / 2;
@@ -544,12 +546,36 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
                     if (goomInfo->update.zoomFilterData.kaleidoEffect
                         && !(zoomFilterParams (goomInfo)
                              && BVAL (*zoomFilterParams (goomInfo)->params[13]))) {
-                        if (goom_irand(goomInfo->gRandom,4) == 0)
-                            goomInfo->update.zoomFilterData.foldCount =
-                                kaleidoFoldCounts[goom_irand(goomInfo->gRandom,4)];
-                        goomInfo->update.zoomFilterData.foldAngle =
-                            goom_irand(goomInfo->gRandom,628) / 100.0f
-                            - (float)M_PI;
+                        /* re-sectorisation : la nouvelle valeur reste proche
+                         * de l'actuelle (N dans [N/2, 2N], angle a +/-0.3 rad).
+                         * Angle courant 0 (jamais initialise) : tirage libre
+                         * dans [1.2, pi]. */
+                        {
+                            int curN = goomInfo->update.zoomFilterData.foldCount;
+                            int newN = kaleidoFoldCounts[goom_irand(goomInfo->gRandom,4)];
+                            if (newN * 2 <= curN)
+                                newN = curN / 2 > 0 ? curN / 2 : newN;
+                            else if (newN >= curN * 2)
+                                newN = curN * 2;
+                            if (curN < 2) newN = curN;  /* securite */
+                            goomInfo->update.zoomFilterData.foldCount = newN;
+                        }
+                        {
+                            float curA = goomInfo->update.zoomFilterData.foldAngle;
+                            if (curA < 0.1f) {
+                                goomInfo->update.zoomFilterData.foldAngle =
+                                    1.2f + (3.1415f - 1.2f)
+                                    * (float)goom_irand(goomInfo->gRandom,1942) / 1941.0f;
+                            } else {
+                                float lo = curA - 0.3f;
+                                float hi = curA + 0.3f;
+                                if (lo < 1.2f) lo = 1.2f;
+                                if (hi > 3.1415f) hi = 3.1415f;
+                                goomInfo->update.zoomFilterData.foldAngle =
+                                    lo + (hi - lo)
+                                    * (float)goom_irand(goomInfo->gRandom,1000) / 999.0f;
+                            }
+                        }
                     }
                     
                     if ((goomInfo->update.zoomFilterData.middleX == 1) || (goomInfo->update.zoomFilterData.middleX == (signed int)goomInfo->screen.width - 1)) {
