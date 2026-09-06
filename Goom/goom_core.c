@@ -666,7 +666,7 @@ guint32 *goom_update (PluginInfo *goomInfo, gint16 data[2][512],
 
         /* Zoom here ! */
         zoomFilterFastRGB (goomInfo, goomInfo->p1, goomInfo->p2, pzfd, goomInfo->screen.width, goomInfo->screen.height,
-                           goomInfo->update.switchIncr, goomInfo->update.switchMult);
+                           &goomInfo->update.switchIncr, &goomInfo->update.switchMult);
         
         /*
          * Affichage tentacule

@@ -128,6 +128,7 @@ struct _PLUGIN_INFO {
 	 */
 	struct {
 		int freezeOn;              /* Freeze actif : plus de changement de config de zoom */
+		int blendFilterFast;       /* boost de vitesse de transition (0..10, 0 = aucun) */
 		int lockvar;               /* pour empecher de nouveaux changements */
 		int goomvar;               /* boucle des gooms */
 		int loopvar;               /* mouvement des points */

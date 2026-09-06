@@ -52,7 +52,7 @@ void pointFilter (PluginInfo *goomInfo, Pixel * pix1, Color c,
  * resx,resy : taille des buffers.
  */
 void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFilterData * zf, guint32 resx,
-                        guint32 resy, int switchIncr, float switchMult);
+                        guint32 resy, int *switchIncr, float *switchMult);
 /* Velocity (in px/frame) of the image content at position (x, y), as applied
  * this frame by the transformation buffer. Returns (0, 0) when the zoom
  * filter is disabled or its buffers are not ready yet.

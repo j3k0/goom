@@ -620,7 +620,7 @@ static void generateTheWaterFXHorizontalDirectionBuffer(PluginInfo *goomInfo, Zo
  *  So that is why you have this name, for the nostalgy of the first days of goom
  *  when it was just a tiny program writen in Turbo Pascal on my i486...
  */
-void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFilterData * zf, Uint resx, Uint resy, int switchIncr, float switchMult)
+void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFilterData * zf, Uint resx, Uint resy, int *switchIncr, float *switchMult)
 {
     Uint x, y;
     
@@ -679,6 +679,13 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
         data->waveEffect = zf->waveEffect;
         data->hypercosEffect = zf->hypercosEffect;
         data->noisify = zf->noisify;
+        /* blendFilterFast : boost de la transition quand la geometrie du
+         * pli change (bascule, re-sectorisation, rotation). Consumme
+         * au swap de la nouvelle table (interlace_start == -1). */
+        goomInfo->update.blendFilterFast =
+            ((data->kaleidoEffect != zf->kaleidoEffect) ? 5 : 0)
+            + ((data->kaleidoEffect && (data->kaleidoN != zf->foldCount)) ? 3 : 0)
+            + ((data->kaleidoEffect && (data->kaleidoAngle != zf->foldAngle)) ? 2 : 0);
         data->kaleidoEffect = zf->kaleidoEffect;
         if (!data->kaleidoEffect) {
             data->kaleidoN = 0;    /* desactive : le pli ne s'applique plus */
@@ -740,6 +747,26 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
         data->freebrutD=data->freebrutT;
         data->freebrutT=tmp;
         data->interlace_start = -2;
+
+        /* blendFilterFast : interpole les parametres de blend de cette
+         * frame entre la vitesse normale et la vitesse boostee. La surge
+         * (switchMult < 1) est elle aussi acceleree, l'impulsion reste
+         * mais frappe plus vite. Consomme une seule fois (la transition
+         * commence au swap). */
+        if (goomInfo->update.blendFilterFast > 0) {
+            int k = goomInfo->update.blendFilterFast;
+            int si = *switchIncr;
+            float sm = *switchMult;
+            /* boosted: increment 8x plus rapide, surge tire vers 0.75 */
+            int siBoost = si * 8;
+            float smBoost = sm - (sm - 0.75f) * ((float)k / 10.0f);
+            si += (int)(((float)(siBoost - si)) * ((float)k / 10.0f));
+            sm += (smBoost - sm);
+            if (si > (BUFFPOINTMASK / 2)) si = BUFFPOINTMASK / 2;
+            *switchIncr = si;
+            *switchMult = sm;
+            goomInfo->update.blendFilterFast = 0;
+        }
     }
     
     if (data->interlace_start>=0)
@@ -750,15 +777,15 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
         makeZoomBufferStripe(data, data->kaleidoEffect ? resy/64 : resy/16);
     }
     
-    if (switchIncr != 0) {
-        data->buffratio += switchIncr;
+    if (*switchIncr != 0) {
+        data->buffratio += *switchIncr;
         if (data->buffratio > BUFFPOINTMASK)
             data->buffratio = BUFFPOINTMASK;
     }
     
-    if (switchMult != 1.0f) {
-        data->buffratio = (int) ((float) BUFFPOINTMASK * (1.0f - switchMult) +
-                                 (float) data->buffratio * switchMult);
+    if (*switchMult != 1.0f) {
+        data->buffratio = (int) ((float) BUFFPOINTMASK * (1.0f - *switchMult) +
+                                 (float) data->buffratio * *switchMult);
     }
     
     data->zoom_width = data->prevX;
