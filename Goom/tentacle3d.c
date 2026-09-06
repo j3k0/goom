@@ -43,6 +43,7 @@ typedef struct _TENTACLE_FX_DATA {
 	PluginParam enabled_bp;
 	PluginParam show_always_bp;
 	PluginParam shape_p;
+	PluginParam twist_p;
 	PluginParam flow_coupling_p;
 	PluginParam fade_p;
 	PluginParameters params;
@@ -72,6 +73,7 @@ typedef struct _TENTACLE_FX_DATA {
 	int shape;
 	int lastShapeReq; /* derniere valeur lue du param Shape, pour detecter un changement en cours de show */
 	int palCycle;     /* cycle de palette type IFS : deplace les octets de couleur */
+	float twistT;     /* temps propre de la courbe de torsion */
 } TentacleFXData;
 
 static void tentacle_new (TentacleFXData *data);
@@ -105,12 +107,18 @@ static void tentacle_fx_init(VisualFX *_this, PluginInfo *info) {
 	IMAX(data->shape_p) = 3;
 	ISTEP(data->shape_p) = 1;
 	data->show_always_bp = secure_b_param ("Always Show", 0);
-	data->params = plugin_parameters ("3D Tentacles", 5);
+	data->twist_p = secure_i_param ("Twist (0=Auto 1-100=Fixed)");
+	IVAL(data->twist_p) = 0;
+	IMIN(data->twist_p) = 0;
+	IMAX(data->twist_p) = 100;
+	ISTEP(data->twist_p) = 1;
+	data->params = plugin_parameters ("3D Tentacles", 6);
 	data->params.params[0] = &data->enabled_bp;
 	data->params.params[1] = &data->show_always_bp;
 	data->params.params[2] = &data->shape_p;
 	data->params.params[3] = &data->flow_coupling_p;
 	data->params.params[4] = &data->fade_p;
+	data->params.params[5] = &data->twist_p;
 	data->cycle = 0.0f;
 	data->col = (0x28<<(ROUGE*8))|(0x2c<<(VERT*8))|(0x5f<<(BLEU*8));
 	data->dstcol = 0;
@@ -130,6 +138,7 @@ static void tentacle_fx_init(VisualFX *_this, PluginInfo *info) {
 	data->shape = GRID3D_SHAPE_TENTACLE;
 	data->lastShapeReq = 0;
 	data->palCycle = 0;
+	data->twistT = 0.0f;
 	data->colors[0] = (0x18<<(ROUGE*8))|(0x4c<<(VERT*8))|(0x2f<<(BLEU*8));
 	data->colors[1] = (0x48<<(ROUGE*8))|(0x2c<<(VERT*8))|(0x6f<<(BLEU*8));
 	data->colors[2] = (0x58<<(ROUGE*8))|(0x3c<<(VERT*8))|(0x0f<<(BLEU*8));
@@ -463,6 +472,38 @@ static void tentacle_update(PluginInfo *goomInfo, Pixel *buf, Pixel *back, int W
 			for (tmp2=0;tmp2<gridCols;tmp2++) {
 				float val = (float)(ShiftRight(data[0][(tmp2 * 512) / gridCols],10)) * rapport;
 				fx_data->vals[tmp2] += TENTACLE_WAVE_SMOOTH * (val - fx_data->vals[tmp2]);
+			}
+			/* torsion du tunnel : cible pilotee par une courbe lente
+			 * (sinus incommensurables, jamais periodique, normalisee
+			 * pour rester dans +-pi/2) a laquelle la musique ajoute un
+			 * releve d'energie (moyenne des vals, deja lissee). Le
+			 * param Twist fixe la cible (1-100 -> 0..2pi) et coupe la
+			 * courbe ; la relaxation dans grid3d_update amortit toute
+			 * transition de cible */
+			{
+				float twistTarget;
+				int twv = IVAL(fx_data->twist_p);
+				if (twv > 0)
+					twistTarget = (float)twv / 100.0f * 6.2832f;
+				else {
+					fx_data->twistT += 0.003f;
+					twistTarget = (sinf(fx_data->twistT*1.0f)
+						+ 0.6f*sinf(fx_data->twistT*1.618f + 1.3f)) / 1.6f
+						* 1.5708f;
+				}
+				/* releve musical : la musique ajoute de la torsion en
+				 * plus, avec retour au calme apres le pic */
+				{
+					float mean = 0.0f;
+					for (tmp2=0;tmp2<gridCols;tmp2++)
+						mean += fx_data->vals[tmp2];
+					mean /= gridCols;
+					twistTarget += mean * 0.02f;
+				}
+				if (twistTarget > 6.2832f)
+					twistTarget = 6.2832f;
+				for (tmp=0;tmp<nbgrid;tmp++)
+					fx_data->grille[tmp]->twist = twistTarget;
 			}
 			for (tmp=0;tmp<nbgrid;tmp++) {
 				fx_data->grille[tmp]->shape = fx_data->shape;

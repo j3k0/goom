@@ -23,6 +23,8 @@ typedef struct {
 	int mode;
 	int shape;
 	float phase; /* temps propre de la forme, avance a chaque update */
+	float twist;      /* torsion du tunnel : cible de l'anneau profond (rad) */
+	float twistCur;   /* valeur relaxee, suit twist avec un retard elastique */
 	v2d *proj; /* persistent projection buffer, sized surf.nbvertex */
 } grid3d;
 

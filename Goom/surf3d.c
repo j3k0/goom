@@ -23,6 +23,8 @@ grid3d *grid3d_new (int sizex, int defx, int sizez, int defz, v3d center) {
 	g->sizez=sizez;
 	g->shape=GRID3D_SHAPE_TENTACLE;
 	g->phase=0.0f;
+	g->twist=0.0f;
+	g->twistCur=0.0f;
 
 	while (y) {
 		--y;
@@ -185,18 +187,28 @@ void grid3d_update (grid3d *g, float angle, float *vals, float dist) {
 		 * ainsi aligne sur la vue au lieu de basculer sur le cote ; il
 		 * tourne autour de son propre axe via phase. Centre des anneaux
 		 * sur l'axe de vue : -cam.y annule la translation. */
-		/* displacement radial par colonne depuis la forme d'onde
+		/* torsion elastique : g->twist (cible) et g->twistCur (valeur
+		 * relaxee) sont pilotes par le FX ; l'anneau profond vise la
+		 * cible, l'avant suit avec un retard lineaire - la difference
+		 * de vitesse angulaire entre anneaux fait la torsion apparente,
+		 * qui apparait et disparait en douceur sans jamais sauter.
+		 * displacement radial par colonne depuis la forme d'onde
 		 * (signee) : le tunnel respire avec la musique ; rayon borne
 		 * pour ne pas traverser l'axe */
 		float cy = -cam.y;
 		float cz = -cam.z;
+		/* relaxation elastique : retard du premier ordre, amortit la
+		 * cible et garantit qu'aucun changement n'apparait d'un coup */
+		g->twistCur += (g->twist - g->twistCur) * 0.03f;
 		for (i=0;i<s->nbvertex;i++) {
 			int gx = i % g->defx;
 			int gz = i / g->defx;
 			/* cible en espace vue : anneau de rayon croissant (cone)
 			 * centre sur l'axe, profond en z, tourne par phase */
-			float theta = ((float)gx + 0.5f) / g->defx * 6.2832f + g->phase;
-			float tz = 30.0f + ((float)gz + 0.5f) / g->defz * 120.0f;
+			float dfrac = ((float)gz + 0.5f) / g->defz;
+			float theta = ((float)gx + 0.5f) / g->defx * 6.2832f
+				+ g->phase + g->twistCur * dfrac;
+			float tz = 30.0f + dfrac * 120.0f;
 			float tr = 35.0f + tz * 0.10f;
 			if (vals)
 				tr += vals[gx];
