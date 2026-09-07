@@ -147,7 +147,7 @@ void surf3d_translate (surf3d *s) {
 	}
 }
 
-void grid3d_update (grid3d *g, float angle, float *vals, float dist) {
+void grid3d_update (grid3d *g, float angle, float *vals, float *vals2, float dist) {
 	int i;
 	float cosa;
 	float sina;
@@ -163,21 +163,43 @@ void grid3d_update (grid3d *g, float angle, float *vals, float dist) {
 		/* onde radiale qui se propage depuis le centre de la feuille :
 		 * recompute la position de base a partir de la grille (sizex/
 		 * sizez) et non des vertex, sinon la frame precedante pollue
-		 * la suivante ; la phase avance a chaque update */
+		 * la suivante ; la phase avance a chaque update.
+		 * trois composantes superposees pour que la feuille danse sur
+		 * les deux axes : onde x par colonne (gauche), onde z par
+		 * ligne (droite, vals2), et onde radiale centrale dont le
+		 * nombre d'onde augmente avec l'energie - fort = hue, calme =
+		 * plat. Amortissement doux pour que toute la feuille bouge */
 		float halfx = (float)g->sizex * 0.5f;
 		float halfz = (float)g->sizez * 0.5f;
+		float energy = 0.0f;
+		float wnum;
+		if (vals) {
+			int k;
+			for (k=0;k<g->defx;k++)
+				energy += vals[k] < 0.0f ? -vals[k] : vals[k];
+			energy /= g->defx;
+		}
+		/* nombre d'onde radial : 5 calme -> 12 fort, le relief suit la
+		 * musique au lieu d'un gain global uniforme */
+		wnum = 5.0f + energy * 0.3f;
+		if (wnum > 12.0f)
+			wnum = 12.0f;
 		for (i=0;i<s->nbvertex;i++) {
 			int gx = i % g->defx;
 			int gz = i / g->defx;
 			float dx = (float)(gx - g->defx/2) / g->defx * g->sizex;
 			float dz = (float)(gz - g->defz/2) / g->defz * g->sizez;
 			float r = sqrtf(dx*dx + dz*dz) / (halfx + halfz) * 2.0f;
+			float ax = vals ? vals[gx] : 0.0f;
+			float az = vals2 ? vals2[gz] : 0.0f;
 			s->vertex[i].x = dx;
 			s->vertex[i].z = dz;
-			/* hauteur pilotee par la forme d'onde (signee) de la colonne :
-			 * la surface suit la musique au lieu d'un simple gain global */
-			float amp = vals ? vals[gx] : 0.0f;
-			s->vertex[i].y = amp * sinf(r*6.0f - g->phase) * expf(-r*1.2f);
+			/* onde x + onde z + onde radiale : les trois se croisent,
+		 * la superposition fait vivre la surface en diagonale */
+			s->vertex[i].y = ax * sinf(dz*0.08f - g->phase)
+				+ az * sinf(dx*0.08f + g->phase)
+				+ (ax + az) * 0.5f * sinf(r*wnum - g->phase)
+					* expf(-r*0.6f);
 		}
 	}
 	else if (g->shape == GRID3D_SHAPE_TUNNEL) {

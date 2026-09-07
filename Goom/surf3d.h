@@ -40,7 +40,7 @@ enum {
 
 /* works on grid3d */
 grid3d *grid3d_new (int sizex, int defx, int sizez, int defz, v3d center);
-void grid3d_update (grid3d *s, float angle, float *vals, float dist);
+void grid3d_update (grid3d *g, float angle, float *vals, float *vals2, float dist);
 
 /* low level */
 void surf3d_draw (surf3d *s, int color, int dist, int *buf, int *back, int W,int H);

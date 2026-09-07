@@ -51,6 +51,7 @@ typedef struct _TENTACLE_FX_DATA {
 	float cycle;
 	grid3d *grille[nbgrid];
 	float *vals;
+	float *vals2; /* forme d'onde par ligne (canal droit) pour la ripple */
 
 #define NB_TENTACLE_COLORS 4
 	int colors[NB_TENTACLE_COLORS];
@@ -193,6 +194,7 @@ static void tentacle_free (TentacleFXData *data) {
             free (g);
         }
 	free (data->vals);
+	free (data->vals2);
 }
 
 static void tentacle_new (TentacleFXData *data) {
@@ -203,7 +205,8 @@ static void tentacle_new (TentacleFXData *data) {
 	v3d center = {0,-17.0,0};
 	/* calloc so the wave-mode temporal smoothing starts from zeros */
 	data->vals = (float*)calloc(definitionx + 20, sizeof(float));
-
+	/* per-row waveform for the ripple (right channel), same discipline */
+	data->vals2 = (float*)calloc(definitionz + 20, sizeof(float));
 	/* randomize the grid density (rows/columns) between the min and the
 	 * current max so every show has a different resolution */
 	cols = TENTACLE_GRID_MIN + rand() % (definitionx - TENTACLE_GRID_MIN + 1);
@@ -460,7 +463,7 @@ static void tentacle_update(PluginInfo *goomInfo, Pixel *buf, Pixel *back, int W
 				/* la forme de la grille suit toujours la forme courante
 				 * (une grille recreee garde GRID3D_SHAPE_TENTACLE) */
 				fx_data->grille[tmp]->shape = fx_data->shape;
-				grid3d_update (fx_data->grille[tmp], rotangle, fx_data->vals, dist2);
+				grid3d_update (fx_data->grille[tmp], rotangle, fx_data->vals, NULL, dist2);
 			}
 		}
 		else if (fx_data->shape != GRID3D_SHAPE_TENTACLE) {
@@ -472,6 +475,15 @@ static void tentacle_update(PluginInfo *goomInfo, Pixel *buf, Pixel *back, int W
 			for (tmp2=0;tmp2<gridCols;tmp2++) {
 				float val = (float)(ShiftRight(data[0][(tmp2 * 512) / gridCols],10)) * rapport;
 				fx_data->vals[tmp2] += TENTACLE_WAVE_SMOOTH * (val - fx_data->vals[tmp2]);
+			}
+			/* la ripple danse aussi selon z : forme d'onde par ligne
+			 * depuis le canal droit, meme lissage temporel */
+			{
+				int gridRows = fx_data->grille[0]->defz;
+				for (tmp2=0;tmp2<gridRows;tmp2++) {
+					float val = (float)(ShiftRight(data[1][(tmp2 * 512) / gridRows],10)) * rapport;
+					fx_data->vals2[tmp2] += TENTACLE_WAVE_SMOOTH * (val - fx_data->vals2[tmp2]);
+				}
 			}
 			/* torsion du tunnel : cible pilotee par une courbe lente
 			 * (sinus incommensurables, jamais periodique, normalisee
@@ -507,7 +519,7 @@ static void tentacle_update(PluginInfo *goomInfo, Pixel *buf, Pixel *back, int W
 			}
 			for (tmp=0;tmp<nbgrid;tmp++) {
 				fx_data->grille[tmp]->shape = fx_data->shape;
-				grid3d_update (fx_data->grille[tmp], rotangle, fx_data->vals, dist2);
+				grid3d_update (fx_data->grille[tmp], rotangle, fx_data->vals, fx_data->vals2, dist2);
 			}
 		}
 		else {
@@ -516,8 +528,7 @@ static void tentacle_update(PluginInfo *goomInfo, Pixel *buf, Pixel *back, int W
 				int gridCols = fx_data->grille[tmp]->defx;
 				for (tmp2=0;tmp2<gridCols;tmp2++)
 					fx_data->vals[tmp2] = (float)(ShiftRight(data[0][goom_irand(goomInfo->gRandom,511)],10)) * rapport;
-				fx_data->grille[tmp]->shape = fx_data->shape;
-				grid3d_update (fx_data->grille[tmp], rotangle, fx_data->vals, dist2);
+				grid3d_update (fx_data->grille[tmp], rotangle, fx_data->vals, NULL, dist2);
 			}
 		}
 		/* drag the tentacle skin with the transformation buffer's velocity
