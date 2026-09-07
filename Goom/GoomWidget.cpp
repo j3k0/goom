@@ -41,6 +41,7 @@ GoomWidget::GoomWidget(GoomWidgetListener &listener, GoomAudioSource &source, in
     
     m_lastFrame = ios_fc::getTimeMs() / 1000.0;
     m_fps = 24.0f;
+    m_firstUpdate = true;
 }
 
 GoomWidget::~GoomWidget() {
@@ -81,7 +82,9 @@ void GoomWidget::updateGoom() {
         // Update Goom
         short soundData[2][512];
         m_source->getSample(soundData);
-        m_rgbaBuffer = (char *)goom_update(m_goom, soundData, 0, /*m_fps*/0, NULL, NULL);
+        m_rgbaBuffer = (char *)goom_update(m_goom, soundData, 0, /*m_fps*/0,
+                                           m_firstUpdate ? (char*)"Goom.2k26" : NULL, NULL);
+        m_firstUpdate = false;
         
         // Alpha Magic
         // TODO: have goom set the alpha value properly, or have a RGB texture and change the data alignment in opengl code

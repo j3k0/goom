@@ -32,6 +32,7 @@ class GoomWidget : public gametools::ActionContainer
     
     double m_lastFrame;
     float  m_fps;
+    bool   m_firstUpdate;
 
 public:
 	GoomWidget(GoomWidgetListener &listener, GoomAudioSource &source, int w, int h);
