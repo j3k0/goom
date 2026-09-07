@@ -50,8 +50,8 @@ enum {
 	GRID3D_DRAW_STROBE,
 	GRID3D_DRAW_ON_GOOM
 };
-#define GRID3D_STROBE_PERIOD 30 /* frames entre deux rafales vers buf */
-#define GRID3D_STROBE_BURST 3   /* longueur de la rafale, en frames */
+#define GRID3D_STROBE_PERIOD 10 /* frames entre deux rafales vers buf */
+#define GRID3D_STROBE_BURST 2   /* longueur de la rafale, en frames */
 #define GRID3D_ONGOOM_FRAMES 5  /* fenetre apres un goom, calee sur lines.c */
 
 /* hi-level */
