@@ -30,10 +30,37 @@ make            # build/Darwin/goom-sdl
 make run        # build, then run against staged goom-data resources
 ```
 
+## Running
+
+`make run` is just a convenience wrapper (`--resources goom-data`); the built
+binary can be invoked directly:
+
+```bash
+cd sdl
+make
+./build/Darwin/goom-sdl --resources goom-data --size 1440x900 --control-lan
+```
+
+The binary path is `build/<uname>/goom-sdl` (`build/Darwin/` on macOS).
+Run with `-h` / `--help` for the built-in usage text.
+
+| Option | Description |
+|---|---|
+| `--fullscreen` | borderless fullscreen at desktop resolution |
+| `--size WxH` | windowed mode size (default 1280x800) |
+| `--resources <dir>` | resources root (default: next to the executable); game data is read from `<dir>/data` |
+| `--file <path>` | play `<path>` (wav) as the audio source — highest-priority source |
+| `--no-mic` | disable microphone input (falls back to the built-in heartbeat) |
+| `--exit-after <secs>` | exit automatically after N seconds (testing) |
+| `--control[=port]` | serve the parameter control UI over HTTP+JSON on localhost (default port 8090; tries port..port+9) — open http://localhost:8090 while running |
+| `--control-lan` | also allow LAN access to the control server (tune parameters from a phone) |
+| `-h`, `--help` | show usage and exit |
+
 Audio source priority: `--file <wav>` > microphone > built-in heartbeat.
-Useful flags: `--file <path>`, `--no-mic`, `--fullscreen`, `--size WxH`,
-`--resources <dir>`, `--control` (HTTP control server on port 8090,
-live parameter tuning — open http://localhost:8090 while running).
+The control server is off by default (`--control-lan` implies `--control`).
+
+Keyboard controls while running: `s` screenshot (BMP to ~/Desktop),
+`f` toggle fullscreen (also F11 / Alt+Enter), `p` pause, `Esc` quit.
 
 ## Tests
 
