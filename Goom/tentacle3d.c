@@ -21,6 +21,10 @@
 #define TENTACLE_FADE_STEP 0.008f  /* fade in/out speed per frame (~125 frames, ~2.5s) */
 #define TENTACLE_FADE_SOUND_MAX 1.0f  /* max brightness boost from volume */
 #define TENTACLE_GRID_MIN 3  /* min grid rows/columns; max = definitionx/definitionz */
+/* mode de trace AUTO : duree de maintien d'un mode avant le prochain
+ * tirage, en frames d'update (~30 fps) : 5..15 s */
+#define TENTACLE_TRAIL_HOLD_MIN 150
+#define TENTACLE_TRAIL_HOLD_RANGE 301 /* + [0..300] -> 150..450 frames */
 /* tentacle modes: one is chosen each time the effect shows */
 enum {
 	TENTACLE_MODE_CLASSIC = 0,  /* random-waveform, timer-driven sweep (current) */
@@ -76,6 +80,8 @@ typedef struct _TENTACLE_FX_DATA {
 	int lastShapeReq; /* derniere valeur lue du param Shape, pour detecter un changement en cours de show */
 	int palCycle;     /* cycle de palette type IFS : deplace les octets de couleur */
 	float twistT;     /* temps propre de la courbe de torsion */
+	int trailAuto;    /* mode de trace resolu quand le param est AUTO (0..2) */
+	int trailHold;    /* frames restantes avant le prochain changement auto */
 } TentacleFXData;
 
 static void tentacle_new (TentacleFXData *data);
@@ -114,10 +120,10 @@ static void tentacle_fx_init(VisualFX *_this, PluginInfo *info) {
 	IMIN(data->twist_p) = 0;
 	IMAX(data->twist_p) = 100;
 	ISTEP(data->twist_p) = 1;
-	data->drawmode_p = secure_i_param ("Trail Mode (0=Legacy 1=Strobe 2=On Goom)");
+	data->drawmode_p = secure_i_param ("Trail Mode (0=Auto 1=Legacy 2=Strobe 3=On Goom)");
 	IVAL(data->drawmode_p) = 0;
 	IMIN(data->drawmode_p) = 0;
-	IMAX(data->drawmode_p) = 2;
+	IMAX(data->drawmode_p) = 3;
 	ISTEP(data->drawmode_p) = 1;
 	data->params = plugin_parameters ("3D Tentacles", 7);
 	data->params.params[0] = &data->enabled_bp;
@@ -140,13 +146,12 @@ static void tentacle_fx_init(VisualFX *_this, PluginInfo *info) {
 	data->happens = 0;
 	
 	data->rotation = 0;
-	data->lock = 0;
-	data->prevDrawit = 0;
-	data->mode = TENTACLE_MODE_CLASSIC;
-	data->shape = GRID3D_SHAPE_TENTACLE;
 	data->lastShapeReq = 0;
 	data->palCycle = 0;
 	data->twistT = 0.0f;
+	data->trailAuto = GRID3D_DRAW_LEGACY;
+	data->trailHold = 0;
+	data->shape = GRID3D_SHAPE_TENTACLE;
 	data->colors[0] = (0x18<<(ROUGE*8))|(0x4c<<(VERT*8))|(0x2f<<(BLEU*8));
 	data->colors[1] = (0x48<<(ROUGE*8))|(0x2c<<(VERT*8))|(0x6f<<(BLEU*8));
 	data->colors[2] = (0x58<<(ROUGE*8))|(0x3c<<(VERT*8))|(0x0f<<(BLEU*8));
@@ -568,13 +573,31 @@ static void tentacle_update(PluginInfo *goomInfo, Pixel *buf, Pixel *back, int W
 			}
 		}
 		fx_data->cycle+=0.01f;
-		for (tmp=0;tmp<nbgrid;tmp++) {
-			fx_data->grille[tmp]->drawMode = IVAL(fx_data->drawmode_p) == 1
-				? GRID3D_DRAW_STROBE
-				: (IVAL(fx_data->drawmode_p) == 2
-					? GRID3D_DRAW_ON_GOOM
-					: GRID3D_DRAW_LEGACY);
-			grid3d_draw (goomInfo, fx_data->grille[tmp],color,colorlow,dist,flow,buf,back,W,H);
+		/* mode de trace : AUTO alterne les trois modes concrets, hold
+		 * uniforme dans [5..15] s (30 fps -> 150..450 frames), sans
+		 * repeter deux fois le meme mode d'affilee */
+		{
+			int mode;
+			if (IVAL(fx_data->drawmode_p) == 0) {
+				if (fx_data->trailHold <= 0) {
+					int next;
+					do {
+						next = goom_irand(goomInfo->gRandom, GRID3D_DRAW_ON_GOOM + 1);
+					} while (next == fx_data->trailAuto);
+					fx_data->trailAuto = next;
+					fx_data->trailHold = TENTACLE_TRAIL_HOLD_MIN
+						+ goom_irand(goomInfo->gRandom,
+							TENTACLE_TRAIL_HOLD_RANGE);
+				}
+				fx_data->trailHold--;
+				mode = fx_data->trailAuto;
+			}
+			else
+				mode = IVAL(fx_data->drawmode_p) - 1; /* 1..3 -> LEGACY..ON_GOOM */
+			for (tmp=0;tmp<nbgrid;tmp++) {
+				fx_data->grille[tmp]->drawMode = mode;
+				grid3d_draw (goomInfo, fx_data->grille[tmp],color,colorlow,dist,flow,buf,back,W,H);
+			}
 		}
 	}
 	else {
