@@ -25,6 +25,8 @@ typedef struct {
 	float phase; /* temps propre de la forme, avance a chaque update */
 	float twist;      /* torsion du tunnel : cible de l'anneau profond (rad) */
 	float twistCur;   /* valeur relaxee, suit twist avec un retard elastique */
+	int drawMode;     /* GRID3D_DRAW_* : comment buf (source du zoom) est trace */
+	int drawCnt;      /* compteur de frames pour le mode strobe */
 	v2d *proj; /* persistent projection buffer, sized surf.nbvertex */
 } grid3d;
 
@@ -35,6 +37,22 @@ enum {
 	GRID3D_SHAPE_TUNNEL,       /* feuille enroulee en tube rotatif */
 	GRID3D_SHAPE_COUNT
 };
+
+/* mode de trace vers buf (la source du zoom, pas l'ecran) :
+ * legacy  : colorlow a chaque frame (piste continue qui decroit)
+ * strobe  : silence total, puis une rafale de quelques frames avec
+ *           la couleur vive - le zoom reprend un snapshot net a
+ *           chaque periode au lieu d'une piste continue
+ * on-goom : l'effet n'est trace que juste apres un goom (cale sur
+ *           l'effet lignes : timeSinceLastGoom < 5 frames) */
+enum {
+	GRID3D_DRAW_LEGACY = 0,
+	GRID3D_DRAW_STROBE,
+	GRID3D_DRAW_ON_GOOM
+};
+#define GRID3D_STROBE_PERIOD 30 /* frames entre deux rafales vers buf */
+#define GRID3D_STROBE_BURST 3   /* longueur de la rafale, en frames */
+#define GRID3D_ONGOOM_FRAMES 5  /* fenetre apres un goom, calee sur lines.c */
 
 /* hi-level */
 

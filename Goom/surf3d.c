@@ -25,6 +25,8 @@ grid3d *grid3d_new (int sizex, int defx, int sizez, int defz, v3d center) {
 	g->phase=0.0f;
 	g->twist=0.0f;
 	g->twistCur=0.0f;
+	g->drawMode=GRID3D_DRAW_LEGACY;
+	g->drawCnt=0;
 
 	while (y) {
 		--y;
@@ -45,9 +47,52 @@ void grid3d_draw (PluginInfo *plug, grid3d *g, int color, int colorlow,
 	int x;
 	v2d v2,v2x;
 	v2d *v2_array = g->proj;
-
+	/* en mode strobe, buf (source du zoom) ne recoit rien la plupart
+	 * du temps, puis une rafale de GRID3D_STROBE_BURST frames avec la
+	 * couleur vive : le zoom reprend un snapshot net a chaque periode
+	 * au lieu d'une piste continue qui decroit. back (l'ecran) reste
+	 * trace a chaque frame, sinon la forme clignoterait a l'ecran */
+	int bufColor;
+	int drawBuf;
+	int drawBack;
+	if (g->drawMode == GRID3D_DRAW_STROBE) {
+		if (g->drawCnt >= GRID3D_STROBE_PERIOD) {
+			g->drawCnt = 0;        /* debut d'une nouvelle rafale */
+		}
+		if (g->drawCnt < GRID3D_STROBE_BURST) {
+			bufColor = color;      /* rafale : couleur vive vers buf */
+			drawBuf = 1;
+		}
+		else {
+			bufColor = 0;          /* inutilise ce frame */
+			drawBuf = 0;           /* silence : rien vers buf */
+		}
+		drawBack = 1;              /* l'ecran reste trace a chaque frame */
+		g->drawCnt++;
+	}
+	else if (g->drawMode == GRID3D_DRAW_ON_GOOM) {
+		/* la fenetre est calee sur l'effet lignes (goom_core.c :
+		 * timeSinceLastGoom < 5) : l'effet claque avec le goom puis
+		 * s'eteint - buf et back suivent la meme fenetre, l'effet
+		 * entier disparait hors goom */
+		if (plug->sound.timeSinceLastGoom < GRID3D_ONGOOM_FRAMES) {
+			bufColor = color;
+			drawBuf = 1;
+			drawBack = 1;
+		}
+		else {
+			bufColor = 0;
+			drawBuf = 0;
+			drawBack = 0;
+		}
+	}
+	else {
+		bufColor = colorlow;       /* legacy : colorlow a chaque frame */
+		drawBuf = 1;
+		drawBack = 1;
+	}
 	v3d_to_v2d(g->surf.svertex, g->surf.nbvertex, W, H, dist, v2_array);
-	
+
 	for (x=0;x<g->defx;x++) {
 		int z;
 		v2x = v2_array[x];
@@ -73,8 +118,10 @@ void grid3d_draw (PluginInfo *plug, grid3d *g, int color, int colorlow,
 			}
 			if (((v2.x != -666) || (v2.y!=-666))
 					&& ((v2x.x != -666) || (v2x.y!=-666))) {
-				plug->methods.draw_line (buf,v2x.x,v2x.y,v2.x,v2.y, colorlow, W, H);
-				plug->methods.draw_line (back,v2x.x,v2x.y,v2.x,v2.y, color, W, H);
+				if (drawBuf)
+					plug->methods.draw_line (buf,v2x.x,v2x.y,v2.x,v2.y, bufColor, W, H);
+				if (drawBack)
+					plug->methods.draw_line (back,v2x.x,v2x.y,v2.x,v2.y, color, W, H);
 			}
 			v2x = v2;
 		}
@@ -105,7 +152,9 @@ void grid3d_draw (PluginInfo *plug, grid3d *g, int color, int colorlow,
 				}
 				if (((v2.x != -666) || (v2.y!=-666))
 						&& ((v2x.x != -666) || (v2x.y!=-666))) {
-					plug->methods.draw_line (buf,v2x.x,v2x.y,v2.x,v2.y, colorlow, W, H);
+				if (drawBuf)
+					plug->methods.draw_line (buf,v2x.x,v2x.y,v2.x,v2.y, bufColor, W, H);
+				if (drawBack)
 					plug->methods.draw_line (back,v2x.x,v2x.y,v2.x,v2.y, color, W, H);
 				}
 				v2x = v2;
@@ -122,8 +171,10 @@ void grid3d_draw (PluginInfo *plug, grid3d *g, int color, int colorlow,
 				}
 				if (((v2.x != -666) || (v2.y!=-666))
 						&& ((v2x.x != -666) || (v2x.y!=-666))) {
-					plug->methods.draw_line (buf,v2x.x,v2x.y,v2.x,v2.y, colorlow, W, H);
-					plug->methods.draw_line (back,v2x.x,v2x.y,v2.x,v2.y, color, W, H);
+					if (drawBuf)
+						plug->methods.draw_line (buf,v2x.x,v2x.y,v2.x,v2.y, bufColor, W, H);
+					if (drawBack)
+						plug->methods.draw_line (back,v2x.x,v2x.y,v2.x,v2.y, color, W, H);
 				}
 			}
 		}

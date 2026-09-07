@@ -44,6 +44,7 @@ typedef struct _TENTACLE_FX_DATA {
 	PluginParam show_always_bp;
 	PluginParam shape_p;
 	PluginParam twist_p;
+	PluginParam drawmode_p;
 	PluginParam flow_coupling_p;
 	PluginParam fade_p;
 	PluginParameters params;
@@ -113,13 +114,19 @@ static void tentacle_fx_init(VisualFX *_this, PluginInfo *info) {
 	IMIN(data->twist_p) = 0;
 	IMAX(data->twist_p) = 100;
 	ISTEP(data->twist_p) = 1;
-	data->params = plugin_parameters ("3D Tentacles", 6);
+	data->drawmode_p = secure_i_param ("Trail Mode (0=Legacy 1=Strobe 2=On Goom)");
+	IVAL(data->drawmode_p) = 0;
+	IMIN(data->drawmode_p) = 0;
+	IMAX(data->drawmode_p) = 2;
+	ISTEP(data->drawmode_p) = 1;
+	data->params = plugin_parameters ("3D Tentacles", 7);
 	data->params.params[0] = &data->enabled_bp;
 	data->params.params[1] = &data->show_always_bp;
 	data->params.params[2] = &data->shape_p;
 	data->params.params[3] = &data->flow_coupling_p;
 	data->params.params[4] = &data->fade_p;
 	data->params.params[5] = &data->twist_p;
+	data->params.params[6] = &data->drawmode_p;
 	data->cycle = 0.0f;
 	data->col = (0x28<<(ROUGE*8))|(0x2c<<(VERT*8))|(0x5f<<(BLEU*8));
 	data->dstcol = 0;
@@ -561,8 +568,14 @@ static void tentacle_update(PluginInfo *goomInfo, Pixel *buf, Pixel *back, int W
 			}
 		}
 		fx_data->cycle+=0.01f;
-		for (tmp=0;tmp<nbgrid;tmp++)
+		for (tmp=0;tmp<nbgrid;tmp++) {
+			fx_data->grille[tmp]->drawMode = IVAL(fx_data->drawmode_p) == 1
+				? GRID3D_DRAW_STROBE
+				: (IVAL(fx_data->drawmode_p) == 2
+					? GRID3D_DRAW_ON_GOOM
+					: GRID3D_DRAW_LEGACY);
 			grid3d_draw (goomInfo, fx_data->grille[tmp],color,colorlow,dist,flow,buf,back,W,H);
+		}
 	}
 	else {
 		fx_data->lig = 1.05f;
