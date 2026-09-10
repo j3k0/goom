@@ -4,10 +4,13 @@
  * ARM NEON (armv8) version of the goom zoom filter, same role as
  * zoom_filter_xmmx (x86 MMX) and ppc_zoom_G4 (AltiVec).
  *
- * Reference semantics: c_zoom() in filters.c. Divergences (same spirit as
- * the MMX STRICT_COMPAT trade-offs, covered by the test tolerance):
- *  - saturating narrow (vqmovn) instead of low-byte truncation,
+ * Reference semantics: c_zoom() in filters.c. One deliberate divergence
+ * (same spirit as the MMX STRICT_COMPAT trade-offs):
  *  - alpha channel is blended (MMX-style) instead of left untouched.
+ * The blend arithmetic itself is bit-exact: the "if (sum > 5) sum -= 5" step
+ * is a saturating vqsub (it differs from C only for sum <= 5, where both
+ * shift to 0) and the >> 8 narrow is a truncating vshrn, i.e. the cast C
+ * does.
  */
 
 #if defined(__aarch64__)
@@ -101,14 +104,14 @@ void zoom_filter_neon (int prevX, int prevY,
         vpos1 = vandq_u32 (vaddq_u32 (vshrq_n_u32 ((uint32x4_t) px1, PERTEDEC),
                                       vmulq_u32 (vshrq_n_u32 ((uint32x4_t) py1, PERTEDEC), vprevX)),
                            vmvnq_u32 (clip1));
-        vidx0 = vaddq_u32 (vshlq_n_u32 (vandq_u32 ((uint32x4_t) px0, vmask15), 4),
-                           vandq_u32 ((uint32x4_t) py0, vmask15));
-        vidx1 = vaddq_u32 (vshlq_n_u32 (vandq_u32 ((uint32x4_t) px1, vmask15), 4),
-                           vandq_u32 ((uint32x4_t) py1, vmask15));
-        /* total index = flat idx + (clip&256): a clipped lane folds +256 to
-         * select the all-zero spreadtab half, so no separate coeff masking. */
-        vtotal0 = vaddq_u32 (vidx0, vandq_u32 (clip0, vzero256));
-        vtotal1 = vaddq_u32 (vidx1, vandq_u32 (clip1, vzero256));
+        /* flat precalCoef index, always in [0,255]: vsli drops (px&15) in
+         * above the low nibble of py, i.e. ((px&15)<<4)|(py&15) in one op.
+         * vtotal = clip ? 256 : idx selects the all-zero spreadtab half for
+         * clipped lanes, so no separate coeff masking is needed. */
+        vidx0 = vsliq_n_u32 ((uint32x4_t) py0, vandq_u32 ((uint32x4_t) px0, vmask15), 4);
+        vidx1 = vsliq_n_u32 ((uint32x4_t) py1, vandq_u32 ((uint32x4_t) px1, vmask15), 4);
+        vtotal0 = vbslq_u32 (clip0, vzero256, vidx0);
+        vtotal1 = vbslq_u32 (clip1, vzero256, vidx1);
 
         /* extract positions + spreadtab indices (unrolled constants). */
 #define ZG2(n)                                                                                                     \
@@ -139,10 +142,13 @@ void zoom_filter_neon (int prevX, int prevY,
                                        vadd_u16 (vget_low_u16 (a[1]), vget_high_u16 (a[1])));
                 acc_hi = vcombine_u16 (vadd_u16 (vget_low_u16 (a[2]), vget_high_u16 (a[2])),
                                        vadd_u16 (vget_low_u16 (a[3]), vget_high_u16 (a[3])));
-                acc_lo = vshrq_n_u16 (vsubq_u16 (acc_lo, vandq_u16 (vcgtq_u16 (acc_lo, vfive), vfive)), 8);
-                acc_hi = vshrq_n_u16 (vsubq_u16 (acc_hi, vandq_u16 (vcgtq_u16 (acc_hi, vfive), vfive)), 8);
+                /* if (sum > 5) sum -= 5; then sum >>= 8, narrowed to u8.
+                 * vqsub saturates at 0, differing from C only for sum <= 5,
+                 * where both shift to 0; vshrn is the truncating narrow C's
+                 * cast performs. */
                 vst1q_u8 ((uint8_t *) (expix2 + loop + base),
-                          vqmovn_high_u16 (vqmovn_u16 (acc_lo), acc_hi));
+                          vshrn_high_n_u16 (vshrn_n_u16 (vqsubq_u16 (acc_lo, vfive), 8),
+                                            vqsubq_u16 (acc_hi, vfive), 8));
             }
         }
     }
@@ -175,12 +181,11 @@ void zoom_filter_neon (int prevX, int prevY,
                                      vmulq_u32 (vshrq_n_u32 ((uint32x4_t) py, PERTEDEC), vprevX)),
                           vmvnq_u32 (clip));
 
-        /* flat precalCoef index, always in [0,255] (indices masked with 15);
-         * total = flat + (clip&256) selects the all-zero spreadtab half for
+        /* flat precalCoef index in [0,255] (vsli = ((px&15)<<4)|(py&15));
+         * vtotal = clip ? 256 : idx selects the all-zero spreadtab half for
          * clipped lanes, so no separate coeff masking is needed. */
-        vidx = vaddq_u32 (vshlq_n_u32 (vandq_u32 ((uint32x4_t) px, vmask15), 4),
-                          vandq_u32 ((uint32x4_t) py, vmask15));
-        vtotal = vaddq_u32 (vidx, vandq_u32 (clip, vzero256));
+        vidx = vsliq_n_u32 ((uint32x4_t) py, vandq_u32 ((uint32x4_t) px, vmask15), 4);
+        vtotal = vbslq_u32 (clip, vzero256, vidx);
 
         /* extract positions + spreadtab indices (unrolled constants). */
         pos[0] = (int) vgetq_lane_u32 (vpos, 0);
@@ -221,14 +226,10 @@ void zoom_filter_neon (int prevX, int prevY,
             acc_hi = vcombine_u16 (vadd_u16 (vget_low_u16 (a[2]), vget_high_u16 (a[2])),
                                    vadd_u16 (vget_low_u16 (a[3]), vget_high_u16 (a[3])));
 
-            /* if (sum > 5) sum -= 5;  then sum >>= 8 */
-            acc_lo = vshrq_n_u16 (vsubq_u16 (acc_lo, vandq_u16 (vcgtq_u16 (acc_lo, vfive), vfive)), 8);
-            acc_hi = vshrq_n_u16 (vsubq_u16 (acc_hi, vandq_u16 (vcgtq_u16 (acc_hi, vfive), vfive)), 8);
-
-            /* saturating narrow (vs C's truncation: tolerated divergence);
-             * single 16-byte store covers all 4 pixels. */
+            /* if (sum > 5) sum -= 5;  then sum >>= 8  (see main loop) */
             vst1q_u8 ((uint8_t *) (expix2 + loop),
-                      vqmovn_high_u16 (vqmovn_u16 (acc_lo), acc_hi));
+                      vshrn_high_n_u16 (vshrn_n_u16 (vqsubq_u16 (acc_lo, vfive), 8),
+                                        vqsubq_u16 (acc_hi, vfive), 8));
         }
     }
 

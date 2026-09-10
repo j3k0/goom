@@ -14,12 +14,13 @@ that is not recorded here was never tested.
 
 - **Correctness is the hard gate, speed is secondary.** A path that trades
   correctness for speed is rejected, not merged.
-- **Two accepted divergences vs `c_zoom`** (from the design spec, MMX-precedent):
-  1. Alpha byte of dest is blended by NEON (C leaves it untouched). Excluded
-     from conformance comparison.
-  2. Saturating narrow (`vqmovn`) vs truncation. In practice unreachable
-     (max channel sum 65025 < 65536), so it is bit-identical — do **not**
-     assume it buys anything.
+- **One accepted divergence vs `c_zoom`** (from the design spec, MMX-precedent):
+  Alpha byte of dest is blended by NEON (C leaves it untouched). Excluded
+  from conformance comparison. The former second divergence (saturating
+  `vqmovn` narrow vs truncation) was removed by path 008: the blend narrows
+  with a truncating `vshrn`, exactly C's cast. It was always bit-identical in
+  practice (max channel sum 65025 < 65536) and never bought anything — do
+  **not** reintroduce it expecting a gain.
 - Kernel stays a drop-in: same signature as `zoom_filter_xmmx`, guarded by
   `#if defined(__aarch64__)`, scalar tail keeps C semantics for `bufsize % 4`.
 - Every measured claim needs a conformance run + bench run at the exact commit.
@@ -96,6 +97,12 @@ Recorded 2026-08-08 on M1 Pro, working tree at guard tightening
 | **baseline** (committed kernel) | 100% / delta 0 | C 1.28, NEON 0.47 | C 2.40, NEON 0.71 | **2.71x** | **3.38x** |
 | **new** (path 001+002) | 100% / delta 0 | C 1.28, NEON 0.38 | C 2.34, NEON 0.68 | **3.37x** | **3.44x** |
 | **new2** (path 007 spreadtab) | 100% / delta 0 | C 1.28, NEON 0.34 | C 2.34, NEON 0.57 | **3.76x** | **4.10x** |
+| **new3** (path 008) | 100% / delta 0 | C 1.00, NEON 0.22 | C 1.76, NEON 0.39 | **4.45x** | **4.54x** |
+
+`new3` row re-measured 2026-09-10 on M1 Pro / Darwin 25.6.0 / clang `-O2`
+(`make bench`, 300 frames), same tree, same batch as its baseline (4.10x /
+4.01x re-measured back-to-back). Absolute NEON time 0.246→0.221 (512x288,
+**1.116x**) and 0.437→0.381 (720x360, **1.149x**), median-of-9 interleaved.
 
 New2-baseline measured in a 5-run interleaved fair batch vs the **original**
 committed kernel (f82af05d): NEON absolute time **0.45→0.34** (512x288,
@@ -108,6 +115,19 @@ The remaining gap to the stated 2x goal is bounded by the scattered-gather,
 issue-bound structure of the kernel — see journal entries 003–006 for the
 rejected paths and the reason (each added instructions or branch
 mispredicts on the random-displacement warp field, which the goom FX uses).
+
+Path 008 re-measured the per-bucket profile by **isolation** instead of
+sampling (force one term to a constant, keep everything else, accept a
+deliberately wrong output): with `vt` forced to 0 (coefficient-table load +
+extraction gone) the kernel gains **1.25–1.32x**; with `pos = loop+b`
+(coalesced source gather, all 24 loads/pixel-group kept) it gains **1.11x**.
+So the coefficient path is the larger single bucket and the scattered
+*addressing* of the source gather is worth ~10%, while the 16 8-byte source
+loads themselves are cheap. Removing both lets clang auto-vectorize the
+gathers entirely (2.35x) — an unreachable figure for a real scatter. After
+path 008 the 8-pixel loop is ~129 instructions against an algorithmic floor
+of ~125, so the next win must come from a different data flow, not from
+better instruction selection.
 
 Any future candidate must beat this per-pixel speedup with equal or better
 conformance to be kept.
@@ -346,5 +366,109 @@ Chronological. Each entry: **id**, **date**, **commit**, **what**, **why
   practical ceiling for the current algorithm — 2x would require eliminating
   the per-pixel gathers, which the goom FX's random-displacement warp makes
   impossible without an unsafe data-dependent branch.
+
+### 008 — exact ALU simplifications: vsli index, bsl clip fold, vqsub threshold (kept)
+- date: 2026-09-10 / commit: (this round)
+- what: three algebraically **exact** substitutions, two places each (8px
+  loop and 4px remainder loop):
+  1. flat precalCoef index: `((px&15)<<4)|(py&15)` (vand+vshl+vand+vorr) →
+     `vsliq_n_u32(py, px&15, 4)` — insert `(px&15)` above the low nibble of
+     `py`, which also supplies the `py&15` mask for free.
+  2. clip fold into the table offset: `vidx + (clip&256)` (vand+vadd) →
+     `vbslq_u32(clip, vdupq_n_u32(256), vidx)` (one select).
+  3. threshold + narrow: `vshrq_n_u16(x - ((x>5)?5:0), 8)` then saturating
+     `vqmovn_u16` → `vshrn_n_u16(vqsubq_u16(x,5), 8)`. `vqsub` saturates at 0
+     and differs from C only for `x <= 5`, where both forms shift to 0 so the
+     stored byte is 0 either way; `vshrn` is the truncating narrow that C's
+     `unsigned char` cast performs. This also **removes divergence #2** from
+     the file header (the saturating narrow): the blend is now bit-exact, and
+     alpha remains the only divergence.
+- predicted effect: cut the vector-ALU op count in the two non-gather buckets
+  (index build, post-blend), which are the port-limited part of the loop.
+- conformance: **100% / delta 0** (20,929,680 px). Independently verified
+  algebraically, not just on the harness fields: threshold identity checked
+  over the entire u16 domain (0 mismatches / 65536 inputs), vsli over the
+  full 16x16 nibble lattice plus `INT_MIN`/`INT_MAX`/0xffffffff probes, bsl
+  against `idx + (mask&256)` for both mask states.
+- measured (median-of-9, 400 frames, single-process interleaved A/B vs the
+  HEAD kernel, same batch): NEON 0.246→0.221 ms/fr (512x288, **1.116x**) and
+  0.437→0.381 (720x360, **1.149x**). Harness `make bench`: 512x288 speedup
+  4.10x→**4.45x**, 720x360 4.01x→**4.54x**. Attribution: vqsub alone
+  1.061x/1.088x, +bsl 1.089x/1.118x, +vsli 1.116x/1.149x. All byte-exact
+  against the baseline variant on full 32-bit pixels.
+- status: **kept**.
+- notes: measured with a *single-process interleaved multi-variant rig*: every
+  candidate is instantiated from one copy of the kernel via a name macro plus
+  a `V_*` toggle, all variants time one frame each in round-robin, results are
+  medians of N repeats, and each variant's output is byte-compared against the
+  baseline variant. This gives same-batch comparisons (the journal's noise
+  rule) and turns correctness into a per-candidate gate. The rig is a
+  throwaway; the harness stays the committed instrument.
+- coexistence: `vmull`+`vmull_high`+`vaddq` instead of `vmull`+`ext`+
+  `vmlal_high`, the combine-then-add reduce, the packed-u64 extraction, and
+  64-byte table alignment were each re-tested **on top of** 008 and all gave
+  nothing (1.117x vs 1.116x, i.e. within noise) — 008 is kept alone.
+
+### 009 — inline-asm fused pair load (rejected)
+- date: 2026-09-10
+- what: replace `vcombine_u8(vld1_u8(p), vld1_u8(p+prevX))` (which clang
+  expands to 2 `ldr d` + `mov.16b` + `mov.d` register juggling) with an
+  asm-pinned `ld1 {%0.8b},[p]` / `ld1 {%0.d}[1],[p+stride]` pair.
+- predicted effect: save the two register-move ops per gathered pixel.
+- conformance: 100% / delta 0 (byte-exact).
+- measured: **regression**, 0.982x (512) / 0.990x (720) alone; 0.976x when
+  combined with the reduce rewrite.
+- status: **rejected**.
+- notes / why: the asm barrier prevents clang from scheduling the loads against
+  the surrounding blend and forces both halves into one register early, which
+  costs more than the moves it removes. clang's mov sequence is fine.
+
+### 010 — packed (pos | vt<<32) u64 lane extraction (rejected)
+- date: 2026-09-10
+- what: `vzip1q_u32`/`vzip2q_u32` the pos and vt vectors so a `u64` lane read
+  yields both indices, halving SIMD→GPR transfers (8 instead of 16 per 8 px).
+- predicted effect: the 16 `umov`/`fmov` per 8 px are a scarce-port bottleneck.
+- conformance: 100% / delta 0.
+- measured: **no gain**, 1.000x–1.031x. A diagnostic that removed *only* the
+  vt extraction (keeping the 16-byte table load, wrong output) gained just
+  1.05–1.07x, while removing the table load as well gained 1.25–1.32x.
+- status: **rejected**.
+- notes / why: the kernel is not transfer-throughput-bound; the coefficient
+  *load* plus its live-state pressure is what the vt path actually costs. Also
+  relevant: fire-and-forget idea 006 (vzip reduce) failed for the same reason.
+
+### 011 — vld1q x2 + vuzp instead of vld2q coordinate loads (rejected)
+- date: 2026-09-10
+- what: `vld2q_s32` (deinterleaving load) → two `vld1q_s32` + `vuzp1q`/`vuzp2q`.
+- predicted effect: Apple's `ld2` is a permute-class load; plain loads + uzp
+  might be cheaper.
+- conformance: 100% / delta 0.
+- measured: **no gain**, 0.994x–1.025x across batches (sign flips run to run).
+- status: **rejected**.
+- notes / why: on Firestorm `ld2.4s` is evidently *not* penalised enough to
+  beat two loads plus two shuffles.
+
+### 012 — vmull/vmull_high/vaddq instead of ext+vmull/vmlal_high (rejected)
+- date: 2026-09-10
+- what: `vaddq_u16(vmull_u8(lo,lo), vmull_high_u8(vP,vC))` to avoid the
+  `ext.16b` clang emits when materialising `vget_high_u8`.
+- predicted effect: move work off the shuffle port onto the multiply port.
+- conformance: 100% / delta 0.
+- measured: 0.998x (512) / 1.021x (720) alone — at the noise floor; no gain
+  on top of 008.
+- status: **rejected** (not merged; op count is identical).
+- notes / why: `ext` and the extra `vaddq` are interchangeable in cost here.
+
+### 013 — 64-byte alignment of `spreadtab` (rejected)
+- date: 2026-09-10
+- what: `__attribute__((aligned(64)))` on the stack table, on the theory that
+  `uint8_t[512][16]` has alignment 1 and every 16-byte `vld1q` could be
+  misaligned or line-straddling.
+- predicted effect: cheaper coefficient loads.
+- conformance: 100% / delta 0.
+- measured: **no effect**, 0.999x–1.024x; no gain on top of 008.
+- status: **rejected**.
+- notes / why: clang already places the 8KB local on a 16-byte boundary and
+  the loads are 16-byte aligned by construction (index scaled by 16).
 
 
