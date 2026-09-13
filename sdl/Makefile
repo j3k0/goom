@@ -14,8 +14,6 @@ CXX ?= c++
 
 SDL_CFLAGS := $(shell sdl2-config --cflags)
 SDL_LIBS   := $(shell sdl2-config --libs)
-FT_CFLAGS  := $(shell pkg-config --cflags freetype2)
-FT_LIBS    := $(shell pkg-config --libs freetype2)
 
 INCLUDES := \
 	-I. \
@@ -24,7 +22,9 @@ INCLUDES := \
 	-I$(TOP)/iosfc/patools \
 	-I$(TOP)/libs/soil
 
-DEFINES := -DALIHOOD_STRICT_ASSETS=0 -DkIncludeEditor=0 -DGT_NO_FRIBIDI
+# GT_NO_FREETYPE: OpenGlDrawContext.cpp uses its inert font stub instead of
+# libs/soil's freetype-backed GLFreeType.cpp (not compiled in below).
+DEFINES := -DALIHOOD_STRICT_ASSETS=0 -DkIncludeEditor=0 -DGT_NO_FRIBIDI -DGT_NO_FREETYPE
 ifeq ($(UNAME),Darwin)
 DEFINES += -DMACOSX=1
 PLATFORM_LIBS := -framework OpenGL -framework CoreFoundation -framework Carbon -lz
@@ -34,7 +34,7 @@ DEFINES += -DWIN32=1
 PLATFORM_LIBS := -lopengl32 -lz -lws2_32
 endif
 
-COMMON_FLAGS := -O2 -g -ffast-math -w $(INCLUDES) $(DEFINES) $(SDL_CFLAGS) $(FT_CFLAGS) \
+COMMON_FLAGS := -O2 -g -ffast-math -w $(INCLUDES) $(DEFINES) $(SDL_CFLAGS) \
 	-include GoomPrefix.h -MMD -MP
 # Goom core C files are ISO-8859-1; -Wno-invalid-source-encoding keeps clang
 # happy (harmless under the file-wide -w).
@@ -73,7 +73,7 @@ SRC_GAMETOOLS := $(addprefix $(TOP)/gametools/, \
 
 # ---- vendored libs ---------------------------------------------------------
 SRC_SOIL := $(addprefix $(TOP)/libs/soil/, \
-	SOIL.c image_DXT.c image_helper.c stb_image_aug.c GLFreeType.cpp)
+	SOIL.c image_DXT.c image_helper.c stb_image_aug.c)
 
 SRC_GOOM := \
 	$(TOP)/Goom/goom_core.c \
@@ -126,7 +126,7 @@ default: $(TARGET)
 
 $(TARGET): $(OBJ)
 	@mkdir -p $(dir $@)
-	$(CXX) -o $@ $(OBJ) $(SDL_LIBS) $(FT_LIBS) $(PLATFORM_LIBS)
+	$(CXX) -o $@ $(OBJ) $(SDL_LIBS) $(PLATFORM_LIBS)
 
 $(BUILD)/%.o: $(TOP)/%.cpp
 	@mkdir -p $(dir $@)

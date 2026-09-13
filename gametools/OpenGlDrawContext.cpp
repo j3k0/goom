@@ -68,11 +68,13 @@ namespace gametools {
     GLFontLibrary g_fontLibrary;
     class GLFont {
     public:
-        GLFont(void *data, int dataSize, unsigned int h, float letter_spacing, float line_spacing) {}
+        GLFont(void *data, int dataSize, unsigned int h, float letter_spacing, float line_spacing)
+            : letter_spacing(letter_spacing), line_spacing(line_spacing), h(h) {}
         const char *getFileName() const { return ""; }
         float letter_spacing;
         float line_spacing;
-        float getHeight() const { return 0.0f; }
+        float h;
+        float getHeight() const { return h; }
         void clean() {}
         void printUnicode(float size, float x, float y, const unsigned short *text, char dir, float dx, float dy) {}
         float getWidthUnicode(float size, const unsigned short *text) { return 0.0f; }

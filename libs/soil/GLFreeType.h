@@ -1,6 +1,14 @@
 #ifndef FREE_NEHE_H
 #define FREE_NEHE_H
 
+#ifdef GT_NO_FREETYPE
+// GT_NO_FREETYPE disables the freetype-backed font backend: either the macro
+// must go, or this translation unit must be dropped from the build. Compiling
+// both would define gametools::g_fontLibrary twice and give GLFont two
+// different layouts in one program.
+#error "GT_NO_FREETYPE defined: drop the macro or drop GLFreeType from the build"
+#endif
+
 #include <map>
 #include <vector>
 #include <list>
