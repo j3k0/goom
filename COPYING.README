@@ -27,9 +27,14 @@ a visible mention of Goom and its original authors in your about
 screen or documentation is the historical convention of this codebase.
 
 Vendored third-party components keep their own licenses:
-  - libs/soil         — public domain / MIT (includes GLFreeType, FTL via freetype)
-  - freetype2 (linked, not vendored) — FTL or GPL-2.0, at your option
+  - libs/soil         — public domain / MIT (image_helper.c is MIT; includes
+                        GLFreeType — see LGPL-ADDITIONAL-PERMISSION.md §6)
+  - freetype2         — FTL or GPL-2.0, at your option; vendored (2.4.2) in
+                        the GoomAndroid build tree, not linked
 
 Note for Android/other closed-source distributions: the Goom core
 is also available under this LGPL license; application-layer glue
-and platform bindings are separate works.
+and platform bindings are separate works. For static linking into
+store-distributed binaries, the copyright holders' written
+additional permission is recorded in
+LGPL-ADDITIONAL-PERMISSION.md.
