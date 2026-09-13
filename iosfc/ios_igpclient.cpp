@@ -7,7 +7,6 @@
  *  Jean-Christophe Hoelt <jeko@ios-software.com>
  *  Guillaume Borios      <gyom@ios-software.com>
  *  Florent Boudet       <flobo@ios-software.com>
- *  Michel Metzger -- participate during the developement of Shubunkin!
  *
  * http://www.ios-software.com/
  *

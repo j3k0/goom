@@ -32,12 +32,17 @@ blanket notice:
   `ios_exception.h`, `ios_memory.h`, `ios_filepath.h`, `ios_stream.h`,
   and their .cpp files).
 
-The 2026 `COPYING.README` statement can operate as the holders' own
-relicensing of their files only where a sole holder authored the file;
-for multi-author files a blanket tree-level statement by one holder
-cannot relicense the co-authors' shares. This document therefore takes
-the per-file header reality as it stands and grants what distribution
-actually needs, on two tracks:
+**Ownership of record (2026-09-13, FOV-1260):** Jean-Christophe
+Hoelt, owner of Fovea.cc, has attested that Fovea owns all copyright
+in the code covered by this document — including the multi-author
+2002-2004 files — so Fovea may license or relicense it as it pleases;
+no co-author consent problem exists. The signatures in §5 are
+confirmatory acknowledgments by the named authors, not a consent
+round. The two-track grant below is kept because the per-file license
+*notices* still say what they say, and a downstream recipient must be
+able to rely on the text rather than on private ownership knowledge.
+This document therefore takes the per-file header reality as it
+stands and grants what distribution actually needs, on two tracks:
 
 1. For the LGPL-2.1 files: LGPL-2.1 §6 permits a combined work under
    terms of the distributor's choice only if the user is given, per
@@ -170,7 +175,7 @@ The permissions in §3 are conditioned on the distributing application:
    > Copyright (c) 2000-2003 Jean-Christophe Hoelt and Guillaume
    > Borios, with contributions from Florent Boudet.
    > Copyright (c) 2003-2012 Fovea.cc — Jean-Christophe Hoelt,
-   > Guillaume Borios, Florent Boudet, Michel Metzger (iosfc).
+   > Guillaume Borios, Florent Boudet.
    > Copyright (c) 2026 the Goom2k26 contributors.
    > Licensed under the GNU LGPL, version 2.1 or later.
    > Source code: https://github.com/j3k0/goom
@@ -187,10 +192,9 @@ next released update of the application carries the §4.2 notice.
 
 ### Jean-Christophe Hoelt — jeko@fovea.cc (Fovea.cc)
 
-Holds copyright in: the Goom core (primary author, "(c)2000-2003
-iOS-software" and "(c) iOS / iOS Software" entity notices included
-per `COPYING.README`'s attribution — counsel confirms the
-entity-to-individual chain); all 2026 revival work
+Holds copyright in: the Goom core (primary author; the "(c)2000-2003
+iOS-software" and "(c) iOS / iOS Software" entity notices are the
+Fovea founders' own group name — see §1); all 2026 revival work
 (`zoom_filter_neon.c`, the `sdl/` tree, engine fixes); `vec3.h`
 ((c) 2004); `ios_hash.h` ((c) 2004); gametools files authored
 2010–2012 (`FontPackage`, `GTPlatform`, `GTScreenOrientation`,
@@ -223,17 +227,13 @@ files; the 2012 iOS glue (`IPhoneDrawContext.mm`, `EAGLView.mm`,
 
 Signature: ______________________  Date: ____________
 
-### Michel Metzger
-
-Holds copyright in the iosfc layer, where he is credited as a
-co-author ("participate during the developement of Shubunkin!").
-Compiled into the covered binaries: `iosfc/ios_exception.h`,
-`ios_memory.h`, `ios_filepath.h`, `ios_stream.h` (all four included
-by the compiled iosfc sources) and `iosfc/ios_filepath.cpp`. Credited
-tree-wide in 22 iosfc files; the remainder are not compiled into any
-covered binary.
-
-Signature: ______________________  Date: ____________
+*Ownership of record: Jean-Christophe Hoelt, owner of Fovea.cc, has
+attested (FOV-1260, 2026-09-13) that Fovea owns all copyright in the
+Covered Software, including the iosfc layer in its entirety. The
+credit line "Michel Metzger — participate during the developement of
+Shubunkin!" that appeared in some iosfc headers was boilerplate from
+an unrelated project (Shubunkin); it has been removed from the tree
+and no third-party copyright is claimed in the iosfc layer.*
 
 *Each signature is the Grantor's act for their own copyright only.
 Where a Grantor's contribution was made in the course of employment
@@ -309,9 +309,9 @@ under its GPL header is unaffected.
 - Legal identity of the grantee "Fovea.cc" (form, registration,
   address) and of the "iOS-software" entity in the 2000-2003 core
   notices.
-- Works-made-for-hire / employment chain for each Grantor's
-  contributions, where the copyright may vest in a Fovea entity
-  rather than the individual.
+- Employment/WFH chain for the Grantors' 2002-2012 contributions:
+  superseded by the §1 ownership attestation (Fovea owns all
+  covered code); kept only as a non-blocking counsel confirmation.
 - Successors-and-assigns; warranty-of-title wording; severability;
   governing law; notice address for §4 cure questions.
 - Confirmation that the §3 GPL-track exception language and the
