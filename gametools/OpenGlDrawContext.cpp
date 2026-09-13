@@ -54,7 +54,34 @@ static std::deque<std::string>  m_consoleLines;
 #include "GTScreenOrientation.h"
 #include "GTPlatform.h"
 #include "GTPreferences.h"
+#ifdef GT_NO_FREETYPE
+// Builds that don't ship libs/soil's freetype-backed font (GLFreeType.cpp is
+// not compiled in) declare GT_NO_FREETYPE: the font resource stays inert.
+// goom never draws TTF text, and the real implementation further down
+// null-guards mCustomFont everywhere.
+namespace gametools {
+    class GLFontLibrary {
+    public:
+        void unrefGlObjects() {}
+        void freeGlObjects() {}
+    };
+    GLFontLibrary g_fontLibrary;
+    class GLFont {
+    public:
+        GLFont(void *data, int dataSize, unsigned int h, float letter_spacing, float line_spacing) {}
+        const char *getFileName() const { return ""; }
+        float letter_spacing;
+        float line_spacing;
+        float getHeight() const { return 0.0f; }
+        void clean() {}
+        void printUnicode(float size, float x, float y, const unsigned short *text, char dir, float dx, float dy) {}
+        float getWidthUnicode(float size, const unsigned short *text) { return 0.0f; }
+        float getHeightUnicode(float size, const unsigned short *text) { return 0.0f; }
+    };
+}
+#else
 #include "GLFreeType.h"
+#endif
 #ifndef GT_NO_FRIBIDI
 #include "fribidi.h"
 #endif
