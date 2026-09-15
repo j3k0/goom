@@ -8,7 +8,7 @@
 
 #include "GoomWidget.h"
 #include "goom.h"
-
+#include <cstdlib>
 using namespace gametools;
 
 GoomWidget::GoomWidget(GoomWidgetListener &listener, GoomAudioSource &source, int w, int h)
@@ -30,19 +30,24 @@ GoomWidget::GoomWidget(GoomWidgetListener &listener, GoomAudioSource &source, in
         case GT_IPHONE3G:  m_goomW = 240; break;
         default:           m_goomW = w / 2;
     }
-    // The fallback (w/2) was tuned on 2012 devices, where it meant a
-    // ~320-640 pixel goom canvas. On modern Retina drawables w/2 is 2-3x
-    // that (1266 on an iPhone 13 in landscape), and the per-frame cost of
-    // the zoom filter + fx chain grows with the canvas: the same build
-    // measured 15-20 fps at 1266x585 and a locked 60 fps at 512 on an A15.
-    // 512 is the largest canvas the empirical table ever chose (Retina
-    // iPads); GL upscales it with no visible softness at these sizes.
-    if (m_goomW > 512)
-        m_goomW = 512;
+    // Per-frame cost of the zoom filter + fx chain grows with the canvas:
+    // the same build measured 15-20 fps at 1266x585 and a locked 60 fps at
+    // 512 on an A15. Caps by platform: desktop machines have headroom for
+    // more, mobile stays at 512 (the largest canvas the empirical table
+    // ever chose). GOOM_RESOLUTION overrides the cap on any platform.
+    int goomWCaps = 512;
+    if (GTGetPlatform() == GT_DESKTOP)
+        goomWCaps = 1024;
+    const char *resEnv = getenv("GOOM_RESOLUTION");
+    if (resEnv != NULL && *resEnv != '\0')
+        goomWCaps = atoi(resEnv);
+    if (m_goomW > goomWCaps)
+        m_goomW = goomWCaps;
     if (GTPlatformIsSlowerThan(GT_IPHONE3G))
         m_goomW = 200;
     
     m_goomH = m_goomW * h / w;
+    GTLogf("GoomWidget: canvas %dx%d (drawable %dx%d, cap %d)", m_goomW, m_goomH, w, h, goomWCaps);
 
     // Init Goom
     m_goom = goom_init(m_goomW, m_goomH);
