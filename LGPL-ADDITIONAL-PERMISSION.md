@@ -31,17 +31,17 @@ blanket notice:
   `ios_exception.h`, `ios_memory.h`, `ios_filepath.h`, `ios_stream.h`,
   and their .cpp files).
 
-**Ownership of record (2026-09-13):** Jean-Christophe Hoelt, owner of
-Fovea.cc, has attested that Fovea owns all copyright in the code
-covered by this document — including the multi-author 2002-2004
-files — so Fovea may license or relicense it as it pleases; no
-co-author consent problem exists. The signatures in §5 are
-confirmatory acknowledgments by the named authors, not a consent
-round. The two-track grant below is kept because the per-file license
-*notices* still say what they say, and a downstream recipient must be
-able to rely on the text rather than on private ownership knowledge.
-This document therefore takes the per-file header reality as it
-stands and grants what distribution actually needs, on two tracks:
+**Ownership of record (2026-09-13):** Jean-Christophe Hoelt has attested
+that Fovea, himself and members of the ios-software group own all copyright
+in the code covered by this document — including the multi-author 2002-2004
+files — so Fovea may license or relicense it as it pleases with their
+consent; no co-author consent problem exists. The signatures in §5 are
+confirmatory acknowledgments by the named authors. The two-track grant
+below is kept because the per-file license *notices* still say what they
+say, and a downstream recipient must be able to rely on the text rather
+than on private ownership knowledge. This document therefore takes the
+per-file header reality as it stands and grants what distribution actually
+needs, on two tracks:
 
 1. For the LGPL-2.1 files: LGPL-2.1 §6 permits a combined work under
    terms of the distributor's choice only if the user is given, per
@@ -181,7 +181,7 @@ update of the application carries the §4.2 notice.
 
 ## 5. Grantors — attribution map and signatures
 
-### Jean-Christophe Hoelt — jeko@fovea.cc (Fovea.cc)
+### Jean-Christophe Hoelt — hoelt@fovea.cc (Fovea.cc)
 
 Holds copyright in: the Goom core (primary author; the "(c)2000-2003
 iOS-software" and "(c) iOS / iOS Software" entity notices are the
@@ -195,7 +195,7 @@ layer; the Fovea modifications to `SOIL.c` and `GLFreeType.cpp` (2026).
 
 Signature: ______________________  Date: ____________
 
-### Guillaume Borios — gyom@fovea.cc (Fovea.cc)
+### Guillaume Borios — Gyom
 
 Holds copyright in: Goom core files (`cpu_info.c`/`cpu_info.h`,
 `ppc_drawings.h`, `ppc_zoom_ultimate.h`, (c) 2003 iOS); 2004
@@ -205,7 +205,7 @@ the iosfc layer.
 
 Signature: ______________________  Date: ____________
 
-### Florent Boudet — flobo@fovea.cc (Fovea.cc)
+### Florent Boudet — Flobo
 
 Holds copyright in: `gametools/OpenGlDrawContext.cpp` and the GL
 draw-context family ((c) 2009); `iosfc/posix/ios_unixmuteximpl.cpp`
@@ -215,8 +215,8 @@ placeholders (attributed to Boudet per §2's attribution-of-record rule).
 
 Signature: ______________________  Date: ____________
 
-*Ownership of record: Jean-Christophe Hoelt, owner of Fovea.cc, has
-attested (2026-09-13) that Fovea owns all copyright in the Covered
+*Ownership of record: Jean-Christophe Hoelt has attested (2026-09-13)
+that Fovea owns all copyright in the Covered
 Software, including the iosfc layer in its entirety. A stale credit
 line from an unrelated project that appeared in some iosfc headers has
 been removed from the tree; no third-party copyright is claimed in
