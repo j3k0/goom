@@ -12,6 +12,7 @@
 #include "GameTools.h"
 #include "GoomAudioSource.h"
 #include "goom_typedefs.h"
+#include <string>
 
 class GoomWidgetListener {
 public:
@@ -33,6 +34,8 @@ class GoomWidget : public gametools::ActionContainer
     double m_lastFrame;
     float  m_fps;
     bool   m_firstUpdate;
+    std::string m_titleText;  // current title (setTitleText); "" = untouched
+    bool   m_titleDirty;      // true while m_titleText has not reached goom yet
 
 public:
 	GoomWidget(GoomWidgetListener &listener, GoomAudioSource &source, int w, int h);
@@ -48,7 +51,14 @@ public:
     void setAudioSource(GoomAudioSource &source) { m_source = &source; }
     const GoomAudioSource &getAudioSource() const { return *m_source; }
     GoomAudioSource &getAudioSource() { return *m_source; }
-    
+
+    // Show a spinning title over the visual on the next update (the same
+    // path as the first-update "Goom.2k26" string). A NULL or empty title
+    // blanks the overlay instead. Trying to show the title that is already
+    // current is ignored, so a host app may call this every frame; inert
+    // until first called.
+    void setTitleText(const char *t);
+
     // Live PluginInfo for the desktop control server (params UI). Owned here.
     PluginInfo *getGoomInfo() { return m_goom; }
     

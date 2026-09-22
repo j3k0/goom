@@ -56,10 +56,25 @@ GoomWidget::GoomWidget(GoomWidgetListener &listener, GoomAudioSource &source, in
     m_lastFrame = ios_fc::getTimeMs() / 1000.0;
     m_fps = 24.0f;
     m_firstUpdate = true;
+    m_titleDirty = false;
 }
 
 GoomWidget::~GoomWidget() {
     goom_close(m_goom);
+}
+
+void GoomWidget::setTitleText(const char *t) {
+    // Keep a copy: the caller's buffer (e.g. a string that changes when the
+    // next track starts) may differ by the time the 30 fps update picks it up.
+    // An empty title blanks the overlay: goom keeps drawing the last text it
+    // was given until it expires, so a space is sent to clear it.
+    std::string value = (t != NULL && t[0] != '\0') ? std::string(t) : std::string(" ");
+    // Setting the title that is already current does nothing: goom animates a
+    // title for its own 200 cycles and re-sending it resets that timer, which
+    // would pin it on screen. This is what lets a host call this every frame.
+    if (value == m_titleText) return;
+    m_titleText = value;
+    m_titleDirty = true;
 }
 
 void GoomWidget::eventOccured(gametools::event_manager::GameControlEvent *event) {
@@ -96,8 +111,21 @@ void GoomWidget::updateGoom() {
         // Update Goom
         short soundData[2][512];
         m_source->getSample(soundData);
+        // A title set through setTitleText (and not shown yet) wins over the
+        // first-update string, so apps that announce the track at startup get
+        // their title shown instead of "Goom.2k26". goom copies the string,
+        // so it is handed over once and kept here for the dedup in
+        // setTitleText.
+        const char *songTitle = NULL;
+        if (m_titleDirty) {
+            songTitle = m_titleText.c_str();
+            m_titleDirty = false;
+        }
+        else if (m_firstUpdate) {
+            songTitle = "Goom.2k26";
+        }
         m_rgbaBuffer = (char *)goom_update(m_goom, soundData, 0, /*m_fps*/0,
-                                           m_firstUpdate ? (char*)"Goom.2k26" : NULL, NULL);
+                                           (char *)songTitle, NULL);
         m_firstUpdate = false;
         
         // Alpha Magic
