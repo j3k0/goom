@@ -8,7 +8,8 @@
  *
  * Conformance pass criteria (see design spec):
  *   >= 99% of pixels byte-exact on RGB, max per-channel delta <= 2.
- *   Alpha (byte 0) is ignored: C leaves dest alpha untouched, NEON blends it.
+ *   Alpha (cop[ALPHA], byte 3 of val) is ignored: C leaves dest alpha
+ *   untouched, NEON blends it.
  */
 
 #include <stdio.h>

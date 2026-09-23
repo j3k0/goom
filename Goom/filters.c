@@ -159,6 +159,15 @@ typedef struct _ZOOM_FILTER_FX_WRAPPER_DATA {
     float   kaleidoAngle;          /* angle du 1er miroir (radians) */
     float   kaleidoN1x, kaleidoN1y;    /* normale cote chambre du 1er miroir */
     float   kaleidoN2x, kaleidoN2y;    /* normale cote chambre du 2eme miroir */
+
+    /** jauge des tables brutS/brutD : le pli dans le referentiel duquel
+     * elles echantillonnent. Commit au swap, peut donc retarder d'une
+     * transition sur la config vivante ci-dessus. */
+    int     gaugeActive;           /* 1 = les tables sont en jauge pliee */
+    int     gaugeN;                /* nombre de secteurs de la jauge */
+    float   gaugeAngle;            /* angle du 1er miroir de la jauge */
+    float   gaugeN1x, gaugeN1y;    /* normales de la jauge (meme convention) */
+    float   gaugeN2x, gaugeN2y;
 } ZoomFilterFXWrapperData;
 
 
@@ -182,32 +191,65 @@ static void kaleidoPrecompute (ZoomFilterFXWrapperData *data, int foldCount, flo
     data->kaleidoN2y = -cosf (foldAngle + d);
 }
 
-/* Kaleidoscope : replie (X, Y) dans la chambre fondamentale. zoomVector
- * travaille deja en coordonnees relatives au milieu, le centre du pli est
- * donc (0, 0). Rend le point replie via (fx, fy). */
-static inline void kaleidoFold (ZoomFilterFXWrapperData *data, float X, float Y, float *fx, float *fy)
+/* Kaleidoscope : replie (X, Y) dans la chambre fondamentale definie par les
+ * 2 normales (cote chambre) n1, n2, en au plus 2*foldCount+2 reflexions.
+ * zoomVector travaille deja en coordonnees relatives au milieu, le centre du
+ * pli est donc (0, 0). Rend le point replie via (fx, fy).
+ * Si g != NULL, il recoit en plus l'image lineaire du secteur, en 2x2 par
+ * colonnes (g[0],g[1] = image de (1,0)) : p = g.f. Le pli l'accumule en
+ * g <- g.R a chaque reflexion, soit g = R1...Rj = (Rj...R1)-1 : re-projeter
+ * un vecteur de la chambre dans le secteur du pixel revient a multiplier
+ * par g. Sert au flux percu (zoomFilterGetVelocity) et au re-gauge. */
+static inline void kaleidoFoldNormals (float n1x, float n1y, float n2x, float n2y, int foldCount,
+                                       float X, float Y, float *fx, float *fy, float *g)
 {
     int i;
 
-    for (i = 0; i < 2 * data->kaleidoN + 2; i++) {
-        float d1 = X * data->kaleidoN1x + Y * data->kaleidoN1y;
-        float d2 = X * data->kaleidoN2x + Y * data->kaleidoN2y;
+    if (g) {
+        g[0] = 1.0f; g[1] = 0.0f;
+        g[2] = 0.0f; g[3] = 1.0f;
+    }
+
+    for (i = 0; i < 2 * foldCount + 2; i++) {
+        float d1 = X * n1x + Y * n1y;
+        float d2 = X * n2x + Y * n2y;
 
         if (d1 >= 0.0f && d2 >= 0.0f)
             break;              /* dans la chambre : fini */
         if (d1 < 0.0f) {
             /* reflexion p' = p - 2 (p.n) n */
-            X -= 2.0f * d1 * data->kaleidoN1x;
-            Y -= 2.0f * d1 * data->kaleidoN1y;
+            X -= 2.0f * d1 * n1x;
+            Y -= 2.0f * d1 * n1y;
+            if (g) {
+                /* g <- g.R1 : R agit sur les lignes de g */
+                float a = 2.0f * (g[0] * n1x + g[2] * n1y);
+                float b = 2.0f * (g[1] * n1x + g[3] * n1y);
+                g[0] -= a * n1x; g[2] -= a * n1y;
+                g[1] -= b * n1x; g[3] -= b * n1y;
+            }
         }
         else {
-            X -= 2.0f * d2 * data->kaleidoN2x;
-            Y -= 2.0f * d2 * data->kaleidoN2y;
+            X -= 2.0f * d2 * n2x;
+            Y -= 2.0f * d2 * n2y;
+            if (g) {
+                float a = 2.0f * (g[0] * n2x + g[2] * n2y);
+                float b = 2.0f * (g[1] * n2x + g[3] * n2y);
+                g[0] -= a * n2x; g[2] -= a * n2y;
+                g[1] -= b * n2x; g[3] -= b * n2y;
+            }
         }
     }
 
     *fx = X;
     *fy = Y;
+}
+
+static inline void kaleidoFold (ZoomFilterFXWrapperData *data, float X, float Y,
+                                float *fx, float *fy, float *g)
+{
+    kaleidoFoldNormals (data->kaleidoN1x, data->kaleidoN1y,
+                        data->kaleidoN2x, data->kaleidoN2y, data->kaleidoN,
+                        X, Y, fx, fy, g);
 }
 
 static inline v2g zoomVector(ZoomFilterFXWrapperData *data, float X, float Y)
@@ -222,7 +264,7 @@ static inline v2g zoomVector(ZoomFilterFXWrapperData *data, float X, float Y)
      * pour toute image diedrale g, chaque image miroir echantillonne la
      * meme source -> la symetrie est preservee quel que soit le mode. */
     if (data->kaleidoEffect && data->kaleidoN > 0)
-        kaleidoFold (data, X, Y, &fx, &fy);
+        kaleidoFold (data, X, Y, &fx, &fy, NULL);
 
     sq_dist = fx*fx + fy*fy;
     
@@ -267,14 +309,6 @@ static inline v2g zoomVector(ZoomFilterFXWrapperData *data, float X, float Y)
         coefVitesse = 2.01f;
     vx = coefVitesse * fx;
     vy = coefVitesse * fy;
-
-    /* Kaleidoscope addon : deplacement du pli lui-meme. Le noyau
-     * echantillonne la source en (X - vx) : ajouter (X - fx) fait lire
-     * dans le secteur replie, la ou le mode de base a ete evalue. */
-    if (data->kaleidoEffect && data->kaleidoN > 0) {
-        vx += X - fx;
-        vy += Y - fy;
-    }
     
     /* Amulette 2 */
     // vx = X * tan(dist);
@@ -310,6 +344,24 @@ static inline v2g zoomVector(ZoomFilterFXWrapperData *data, float X, float Y)
     /* TODO : Water Mode */
     //    if (data->waveEffect)
 
+    /* Finish and avoid null displacement : sur le vecteur du mode de base
+     * (mode + add-ons, qui ne depend que du point replie). Il reste donc
+     * constant sur une orbite : les miroirs gardent des sources egales et
+     * la symetrie du mandala ne casse pas sur les coutures. */
+    {
+        float min = 2.0f / ((float)data->prevX * BUFFPOINTNBF);
+        if (fabs(vx) < min) vx = (vx < 0.0f) ? -min : min;
+        if (fabs(vy) < min) vy = (vy < 0.0f) ? -min : min;
+    }
+
+    /* Kaleidoscope addon : deplacement du pli lui-meme. Le noyau
+     * echantillonne la source en (X - vx) : ajouter (X - fx) fait lire
+     * dans le secteur replie, la ou le mode de base a ete evalue. */
+    if (data->kaleidoEffect && data->kaleidoN > 0) {
+        vx += X - fx;
+        vy += Y - fy;
+    }
+
     vecteur.x = vx;
     vecteur.y = vy;
     
@@ -328,13 +380,14 @@ static void makeZoomBufferStripe(ZoomFilterFXWrapperData * data, int INTERLACE_I
 {
     // Position of the pixel to compute in pixmap coordinates
     Uint x, y;
+    /* un pas de 0 (resy petit) ne genérerait aucune ligne : bouclage infini */
+    if (INTERLACE_INCR < 1) INTERLACE_INCR = 1;
     // Where (verticaly) to stop generating the buffer stripe
     int maxEnd = (data->interlace_start + INTERLACE_INCR);
     // Ratio from pixmap to normalized coordinates
     float ratio = 2.0f/((float)data->prevX);
     // Ratio from normalized to virtual pixmap coordinates
     float inv_ratio = BUFFPOINTNBF/ratio;
-    float min = ratio/BUFFPOINTNBF;
     // Y position of the pixel to compute in normalized coordinates
     float Y = ((float)(data->interlace_start - data->middleY)) * ratio;
     
@@ -348,13 +401,16 @@ static void makeZoomBufferStripe(ZoomFilterFXWrapperData * data, int INTERLACE_I
         for (x = 0; x < data->prevX; x++)
         {
             v2g vector = zoomVector (data, X, Y);
-            
-            /* Finish and avoid null displacement */
-            if (fabs(vector.x) < min) vector.x = (vector.x < 0.0f) ? -min : min;
-            if (fabs(vector.y) < min) vector.y = (vector.y < 0.0f) ? -min : min;
-            
-            data->brutT[premul_y_prevX] = ((int)((X-vector.x)*inv_ratio)+((int)(data->middleX*BUFFPOINTNB)));
-            data->brutT[premul_y_prevX+1] = ((int)((Y-vector.y)*inv_ratio)+((int)(data->middleY*BUFFPOINTNB)));
+
+            /* Quantification avec biais de 0.25 : pour un pli "rationnel"
+             * (miroirs sur la grille pixel) les valeurs mathematiques
+             * tombent sur des entieres ou demi-unites, et la troncature
+             * simple perd le bit de poids faible au bruit float entre
+             * p et g.p — les miroirs liraient des sources decalees d'un
+             * seizieme de pixel. Biaisee d'un quart, la meme quantification
+             * sort le meme entier pour toute l'orbite. */
+            data->brutT[premul_y_prevX] = ((int)((X-vector.x)*inv_ratio + 0.25f)+((int)(data->middleX*BUFFPOINTNB)));
+            data->brutT[premul_y_prevX+1] = ((int)((Y-vector.y)*inv_ratio + 0.25f)+((int)(data->middleY*BUFFPOINTNB)));
             /* Kaleidoscope : les reflexions peuvent envoyer la source hors
              * buffer, et les noyaux ne testent que la borne superieure
              * (px >= ax -> noir) : on borne des deux cotes pour garder les
@@ -377,7 +433,10 @@ static void makeZoomBufferStripe(ZoomFilterFXWrapperData * data, int INTERLACE_I
         Y += ratio;
     }
     data->interlace_start += INTERLACE_INCR;
-    if (y >= data->prevY-1) data->interlace_start = -1;
+    /* y = premiere ligne non generee : fini seulement quand elles le sont
+     * toutes (l'ancien test prevY-1 sautait la derniere ligne quand un pas
+     * finissait dessus, laissant une ligne de l'ancienne table). */
+    if (y >= data->prevY) data->interlace_start = -1;
 }
 
 
@@ -628,8 +687,6 @@ static void generateTheWaterFXHorizontalDirectionBuffer(PluginInfo *goomInfo, Zo
  */
 void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFilterData * zf, Uint resx, Uint resy, int *switchIncr, float *switchMult)
 {
-    Uint x, y;
-    
     ZoomFilterFXWrapperData *data = (ZoomFilterFXWrapperData*)goomInfo->zoomFilter_fx.fx_data;
     
     if (!BVAL(data->enabled_bp)) return;
@@ -742,17 +799,92 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
     
     /* generation du buffer de trans */
     if (data->interlace_start == -1) {
-        
-        /* sauvegarde de l'etat actuel dans la nouvelle source
-        * TODO: write that in MMX (has been done in previous version, but did not follow some new fonctionnalities) */
-        y = data->prevX * data->prevY * 2;
-        for (x = 0; x < y; x += 2) {
-            int brutSmypos = data->brutS[x];
-            int x2 = x + 1;
-            
-            data->brutS[x] = brutSmypos + (((data->brutD[x] - brutSmypos) * data->buffratio) >> BUFFPOINTNB);
-            brutSmypos = data->brutS[x2];
-            data->brutS[x2] = brutSmypos + (((data->brutD[x2] - brutSmypos) * data->buffratio) >> BUFFPOINTNB);
+        /* Sauvegarde de l'etat actuel dans la nouvelle source, EN JAUGE
+         * CIBLE quand le pli change. brutS et brutD doivent echantillonner
+         * dans le meme referentiel : a cheval sur deux jauges, l'interpolation
+         * (buffratio plus bas) fait glisser chaque source le long du
+         * deplacement du pli (X - f) : un arrachement de la taille de l'ecran,
+         * qui s'inverse a chaque couture. Le pli n'est pas continu (il
+         * identifie des points entre eux) : la jauge se commite d'un coup.
+         *  - cible pliee : on re-echantillonne l'etat courant A TRAVERS le
+         *    pli (la source lue est celle du point replie). Chaque miroir
+         *    recoit le contenu de la chambre : le mandala s'allume d'un coup,
+         *    et toute la transition suivante reste dans la chambre (bornee,
+         *    symetrique).
+         *  - cible non pliee, source pliee : on re-projette chaque source
+         *    dans le secteur du pixel (ou le rendu etait identique, l'etat
+         *    etant symetrique) : les miroirs s'ouvrent sans arrachement. */
+        Uint px, py;
+        int targetFolded = data->kaleidoEffect && data->kaleidoN > 0;
+        int regauge = (targetFolded ? (!data->gaugeActive
+                                       || data->gaugeN != data->kaleidoN
+                                       || data->gaugeAngle != data->kaleidoAngle)
+                                    : (data->gaugeActive != 0));
+        float mx = (float)data->middleX, my = (float)data->middleY;
+        float m16x = mx * (float)BUFFPOINTNB, m16y = my * (float)BUFFPOINTNB;
+        int maxX = ((data->prevX - 1) << PERTEDEC) - 1;
+        int maxY = ((data->prevY - 1) << PERTEDEC) - 1;
+        /* la cible pliee lit brutS/brutD au point replie et ecrit partout :
+         * aucun des trois buffers n'est libre, on passe par un scratch. */
+        int *dst = data->brutS;
+        int *scratch = NULL;
+
+        if (targetFolded && regauge) {
+            scratch = (int *)malloc (data->prevX * data->prevY * 2 * sizeof (int));
+            dst = scratch;
+        }
+
+        for (py = 0; py < data->prevY; py++) {
+            for (px = 0; px < data->prevX; px++) {
+                Uint rx = px, ry = py;
+                float fx = 0.0f, fy = 0.0f, g[4];
+                int haveG = 0;
+
+                if (regauge) {
+                    if (targetFolded) {
+                        kaleidoFold (data, (float)px - mx, (float)py - my, &fx, &fy, NULL);
+                        rx = (Uint)(fx + mx + 0.5f);
+                        ry = (Uint)(fy + my + 0.5f);
+                        if (rx >= data->prevX) rx = data->prevX - 1;
+                        if (ry >= data->prevY) ry = data->prevY - 1;
+                    }
+                    else {
+                        /* p = g.f : g ramene la source de la chambre dans le
+                         * secteur du pixel (meme couleur : l'etat est
+                         * symetrique) */
+                        kaleidoFoldNormals (data->gaugeN1x, data->gaugeN1y,
+                                            data->gaugeN2x, data->gaugeN2y,
+                                            data->gaugeN,
+                                            (float)px - mx, (float)py - my,
+                                            &fx, &fy, g);
+                        haveG = 1;
+                    }
+                }
+                {
+                    Uint rpos = (ry * data->prevX + rx) * 2;
+                    Uint wpos = (py * data->prevX + px) * 2;
+                    int sx = data->brutS[rpos]
+                        + (((data->brutD[rpos] - data->brutS[rpos]) * data->buffratio) >> BUFFPOINTNB);
+                    int sy = data->brutS[rpos+1]
+                        + (((data->brutD[rpos+1] - data->brutS[rpos+1]) * data->buffratio) >> BUFFPOINTNB);
+
+                    if (haveG) {
+                        float vx = (float)sx - m16x, vy = (float)sy - m16y;
+                        sx = (int)(g[0] * vx + g[2] * vy + m16x + 0.5f);
+                        sy = (int)(g[1] * vx + g[3] * vy + m16y + 0.5f);
+                    }
+                    if (sx < 0) sx = 0;
+                    else if (sx > maxX) sx = maxX;
+                    if (sy < 0) sy = 0;
+                    else if (sy > maxY) sy = maxY;
+                    dst[wpos] = sx;
+                    dst[wpos+1] = sy;
+                }
+            }
+        }
+        if (scratch != NULL) {
+            memcpy (data->brutS, scratch, data->prevX * data->prevY * 2 * sizeof (int));
+            free (scratch);
         }
         data->buffratio = 0;
     }
@@ -766,6 +898,17 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
         data->freebrutD=data->freebrutT;
         data->freebrutT=tmp;
         data->interlace_start = -2;
+
+        /* commit de la jauge : brutS/brutD echantillonnent desormais dans le
+         * referentiel du pli vivant (le re-gauge a ete fait au bloc
+         * precedent). zoomFilterGetVelocity y lit le flux percu. */
+        data->gaugeActive = data->kaleidoEffect && data->kaleidoN > 0;
+        data->gaugeN = data->kaleidoN;
+        data->gaugeAngle = data->kaleidoAngle;
+        data->gaugeN1x = data->kaleidoN1x;
+        data->gaugeN1y = data->kaleidoN1y;
+        data->gaugeN2x = data->kaleidoN2x;
+        data->gaugeN2y = data->kaleidoN2y;
 
         /* blendFilterFast : interpole les parametres de blend de cette
          * frame entre la vitesse normale et la vitesse boostee. La surge
@@ -812,12 +955,6 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
     goomInfo->methods.zoom_filter (data->prevX, data->prevY, pix1, pix2,
                                    data->brutS, data->brutD, data->buffratio, data->precalCoef);
 }
-int zoomFilterKaleidoActive (PluginInfo *goomInfo)
-{
-    ZoomFilterFXWrapperData *data = (ZoomFilterFXWrapperData*)goomInfo->zoomFilter_fx.fx_data;
-    return data->kaleidoEffect && data->kaleidoN > 0;
-}
-
 void zoomFilterGetVelocity (PluginInfo *goomInfo, float x, float y, float *vx, float *vy)
 {
     ZoomFilterFXWrapperData *data = (ZoomFilterFXWrapperData*)goomInfo->zoomFilter_fx.fx_data;
@@ -844,9 +981,35 @@ void zoomFilterGetVelocity (PluginInfo *goomInfo, float x, float y, float *vx, f
     effy = data->brutS[pos+1] + (((data->brutD[pos+1] - data->brutS[pos+1]) * data->buffratio) >> BUFFPOINTNB);
 
     /* the field stores source coordinates in 1/16 px, so the content
-     * velocity is (dest - source) / 16 */
-    *vx = (float)((ix << PERTEDEC) - effx) / (float)sqrtperte;
-    *vy = (float)((iy << PERTEDEC) - effy) / (float)sqrtperte;
+     * velocity is (dest - source) / 16.
+     *
+     * Etat plie : les tables sont en jauge chambre (la source est commune a
+     * tous les miroirs) et (dest - source) porte le deplacement du pli
+     * lui-meme (de l'ordre de l'ecran, inverse a chaque couture) : ce n'est
+     * pas le mouvement que le contenu fait voir. On re-projette la source
+     * dans le secteur du pixel avant de differencier,
+     *     u = (p - m) - g.(s - m)   avec   p = g.f
+     * exactement le flux percu : borne comme le mode de base, et equivariant
+     * u(g.p) = g.u(p) (les copies miroirs d'un meme contenu derivent en
+     * miroir). Sans pli, g = I et la formule ci-dessus est (dest - source). */
+    {
+        float sxp = (float)effx / (float)sqrtperte - (float)data->middleX;
+        float syp = (float)effy / (float)sqrtperte - (float)data->middleY;
+
+        if (data->gaugeActive) {
+            float g[4], fx, fy, gx, gy;
+            kaleidoFoldNormals (data->gaugeN1x, data->gaugeN1y,
+                                data->gaugeN2x, data->gaugeN2y, data->gaugeN,
+                                (float)ix - (float)data->middleX,
+                                (float)iy - (float)data->middleY, &fx, &fy, g);
+            gx = g[0] * sxp + g[2] * syp;
+            gy = g[1] * sxp + g[3] * syp;
+            sxp = gx;
+            syp = gy;
+        }
+        *vx = ((float)ix - (float)data->middleX) - sxp;
+        *vy = ((float)iy - (float)data->middleY) - syp;
+    }
 }
 
 static void generatePrecalCoef (int precalCoef[16][16])
@@ -924,6 +1087,11 @@ static void zoomFilterVisualFXWrapper_init (struct _VISUAL_FX *_this, PluginInfo
 
     data->kaleidoEffect = 0;    /* addon inactif au demarrage */
     kaleidoPrecompute (data, 4, 0.0f);
+    data->gaugeActive = 0;      /* tables en jauge non pliee */
+    data->gaugeN = 0;
+    data->gaugeAngle = 0.0f;
+    data->gaugeN1x = data->gaugeN1y = 0.0f;
+    data->gaugeN2x = data->gaugeN2y = 0.0f;
     
     data->enabled_bp = secure_b_param("Enabled", 1);
 

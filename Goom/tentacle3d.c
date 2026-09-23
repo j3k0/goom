@@ -544,12 +544,8 @@ static void tentacle_update(PluginInfo *goomInfo, Pixel *buf, Pixel *back, int W
 			}
 		}
 		/* drag the tentacle skin with the transformation buffer's velocity
-		 * field: screen-space displacement of each projected vertex.
-		 * Kaleidoscope on : pas de couplage, le champ de vitesse est
-		 * discontinu aux coutures du pli */
-		flow = zoomFilterKaleidoActive (goomInfo)
-			? 0.0f
-			: (float)IVAL(fx_data->flow_coupling_p) / 100.0f * TENTACLE_FLOW_FORCE;
+		 * field: screen-space displacement of each projected vertex */
+		flow = (float)IVAL(fx_data->flow_coupling_p) / 100.0f * TENTACLE_FLOW_FORCE;
 		/* les formes en surface tracent deux fois plus de segments que
 		 * les tentacules (colonnes + rangees) : en mode add, ca sature
 		 * vite. Palette tournante type IFS : rampes triangulaires
