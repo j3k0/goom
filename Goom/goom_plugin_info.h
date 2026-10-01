@@ -69,6 +69,25 @@ struct _SOUND_INFO {
 };
 
 
+/* geometric wipe blend ("center-out" frontier between brutS and brutD).
+ * NULL = LINEAR (the kernel uses buffratio exactly as before).
+ * WIPE_RADIUS / WIPE_SEAMS ignore buffratio and select per pixel:
+ * inside the frontier the new map (brutD), outside the old one
+ * (brutS), with a soft lerp band of `ring` pixels (<= 0 = hard step).
+ * wobble/luma: per-pixel frontier jitter driven by an invariant color
+ * field (resx*resy bytes, one entry per output pixel); NULL luma or
+ * wobble <= 0 disables the jitter. */
+typedef struct {
+	int   mode;       /* 0 = LINEAR (uses buffratio), 1 = WIPE_RADIUS, 2 = WIPE_SEAMS */
+	float progress;   /* c in [0,1]; global endpoint overrides */
+	float ring;       /* soft band width px; <= 0 = hard step */
+	float cx, cy;     /* frontier center, pixels */
+	float n1x, n1y;   /* WIPE_SEAMS: unit normal of fold line 0 */
+	int   foldCount;  /* WIPE_SEAMS: N seam lines at angle step PI/N */
+	float wobble;     /* 0..0.5 per-pixel frontier jitter spread */
+	const unsigned char *luma; /* per-output-pixel invariant color field (resx*resy bytes), NULL = no wobble */
+} ZoomBlend;
+
 /**
  * Allows FXs to know the current state of the plugin.
  */
@@ -131,7 +150,6 @@ struct _PLUGIN_INFO {
 		int kaleidoManualOn;       /* dernier etat connu du mode manuel */
 		int kaleidoManualN;        /* dernier N manuel delivre au filtre */
 		float kaleidoManualAngle;  /* dernier angle manuel delivre au filtre */
-		int blendFilterFast;       /* boost de vitesse de transition (0..10, 0 = aucun) */
 		int lockvar;               /* pour empecher de nouveaux changements */
 		int goomvar;               /* boucle des gooms */
 		int loopvar;               /* mouvement des points */
@@ -163,7 +181,7 @@ struct _PLUGIN_INFO {
 
 	struct {
 		void (*draw_line) (Pixel *data, int x1, int y1, int x2, int y2, int col, int screenx, int screeny);
-		void (*zoom_filter) (int sizeX, int sizeY, Pixel *src, Pixel *dest, int *brutS, int *brutD, int buffratio, int precalCoef[16][16]);
+		void (*zoom_filter) (int sizeX, int sizeY, Pixel *src, Pixel *dest, int *brutS, int *brutD, int buffratio, int precalCoef[16][16], const ZoomBlend *blend);
 	} methods;
 	
 	GoomRandom *gRandom;

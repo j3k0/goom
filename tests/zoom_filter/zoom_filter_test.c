@@ -25,7 +25,8 @@
 extern void zoom_filter_neon (int prevX, int prevY,
                               Pixel *expix1, Pixel *expix2,
                               int *lbruS, int *lbruD, int buffratio,
-                              int precalCoef[16][16]);
+                              int precalCoef[16][16],
+                              const ZoomBlend *blend);
 
 #define BUFFPOINTNB 16
 #define PERTEDEC 4
@@ -182,7 +183,7 @@ typedef struct {
 } Size;
 
 static int run_case (int W, int H, int adversarial, int buffratio, int amplitude,
-                     int precalCoef[16][16], CompareStats *out)
+                     const ZoomBlend *blend, int precalCoef[16][16], CompareStats *out)
 {
     int bufsize2 = W * H * 2;
     Pixel *src = malloc (W * H * sizeof (Pixel));
@@ -205,8 +206,8 @@ static int run_case (int W, int H, int adversarial, int buffratio, int amplitude
     }
 
     memcpy (src_copy, src, W * H * sizeof (Pixel));
-    zoom_filter_c (W, H, src, dest_c, brutS, brutD, buffratio, precalCoef);
-    zoom_filter_neon (W, H, src_copy, dest_n, brutS, brutD, buffratio, precalCoef);
+    zoom_filter_c (W, H, src, dest_c, brutS, brutD, buffratio, precalCoef, blend);
+    zoom_filter_neon (W, H, src_copy, dest_n, brutS, brutD, buffratio, precalCoef, blend);
 
     compare (W, H, dest_c, dest_n, out);
 
@@ -218,7 +219,8 @@ static int run_case (int W, int H, int adversarial, int buffratio, int amplitude
 static int conformance (void)
 {
     static const Size sizes[] = {
-        {512, 288}, {720, 360}, {409, 256}, {333, 201}, {64, 48}, {5, 3}
+        {512, 288}, {720, 360}, {409, 256}, {333, 201}, {64, 48}, {5, 3},
+        {864, 542}   /* toile reelle du port SDL (milieu impair, pli non aligne sur la grille) */
     };
     static const int ratios[] = {0, 1, 32768, 65535, 65536, 131072};
     int precalCoef[16][16];
@@ -237,19 +239,121 @@ static int conformance (void)
                 int adv;
                 for (adv = 0; adv < 2; ++adv) {
                     CompareStats st;
-                    rng_state = 0x9e3779b9u ^ (seed * 0x85ebca6bu) ^ (unsigned) (W << 16) ^ (unsigned) H;
-                    run_case (W, H, adv, ratios[r], 48, precalCoef, &st);
+                    ZoomBlend blend;
+                    unsigned char *luma = NULL;
+                    int bm;
+                    for (bm = 0; bm < 12; ++bm) {
+                        /* bm 0: LINEAR (blend = NULL); bm 1-5: the wipe
+                         * conformance cases (C vs NEON byte-exact on RGB
+                         * under the per-pixel selection); bm 6-10: wipe +
+                         * a deterministic non-trivial luma field at wobble
+                         * 0.25 (the same bytes to both kernels); bm 11:
+                         * wobble armed with luma NULL (must read j = 1) */
+                        switch (bm) {
+                            case 1:     /* WIPE_RADIUS hard */
+                                blend.mode = 1;
+                                blend.progress = 0.35f;
+                                blend.ring = 0.0f;
+                                break;
+                            case 2:     /* WIPE_RADIUS hard, later */
+                                blend.mode = 1;
+                                blend.progress = 0.8f;
+                                blend.ring = 0.0f;
+                                break;
+                            case 3:     /* WIPE_RADIUS ring 3.5 */
+                                blend.mode = 1;
+                                blend.progress = 0.5f;
+                                blend.ring = 3.5f;
+                                break;
+                            case 4:     /* WIPE_SEAMS hard */
+                                blend.mode = 2;
+                                blend.progress = 0.4f;
+                                blend.ring = 0.0f;
+                                blend.n1x = 0.0f;
+                                blend.n1y = 1.0f;
+                                blend.foldCount = 4;
+                                break;
+                            case 5:     /* WIPE_SEAMS ring 2.0 */
+                                blend.mode = 2;
+                                blend.progress = 0.6f;
+                                blend.ring = 2.0f;
+                                blend.n1x = 0.0f;
+                                blend.n1y = 1.0f;
+                                blend.foldCount = 4;
+                                break;
+                            case 6:     /* WIPE_RADIUS hard + wobble */
+                                blend.mode = 1;
+                                blend.progress = 0.35f;
+                                blend.ring = 0.0f;
+                                break;
+                            case 7:     /* WIPE_RADIUS ring 2.5 + wobble */
+                                blend.mode = 1;
+                                blend.progress = 0.45f;
+                                blend.ring = 2.5f;
+                                break;
+                            case 8:     /* WIPE_RADIUS hard, later + wobble */
+                                blend.mode = 1;
+                                blend.progress = 0.8f;
+                                blend.ring = 0.0f;
+                                break;
+                            case 9:     /* WIPE_SEAMS hard + wobble */
+                                blend.mode = 2;
+                                blend.progress = 0.4f;
+                                blend.ring = 0.0f;
+                                blend.n1x = 0.0f;
+                                blend.n1y = 1.0f;
+                                blend.foldCount = 5;
+                                break;
+                            case 10:    /* WIPE_SEAMS ring 2.0 + wobble */
+                                blend.mode = 2;
+                                blend.progress = 0.6f;
+                                blend.ring = 2.0f;
+                                blend.n1x = 0.0f;
+                                blend.n1y = 1.0f;
+                                blend.foldCount = 8;
+                                break;
+                            case 11:    /* wobble without a luma field */
+                                blend.mode = 1;
+                                blend.progress = 0.5f;
+                                blend.ring = 0.0f;
+                                break;
+                            default:    /* LINEAR */
+                                memset (&blend, 0, sizeof (blend));
+                                break;
+                        }
+                        blend.cx = (float) W / 2;
+                        blend.cy = (float) H / 2;
+                        blend.wobble = 0.0f;
+                        blend.luma = NULL;
 
-                    total_pixels += st.pixels;
-                    total_exact += st.exact;
-                    if (st.maxdelta > global_maxdelta)
-                        global_maxdelta = st.maxdelta;
+                        rng_state = 0x9e3779b9u ^ (seed * 0x85ebca6bu) ^ (unsigned) (W << 16) ^ (unsigned) H;
 
-                    if (st.maxdelta > 2 || st.exact * 100 < st.pixels * 99) {
-                        printf ("FAIL %4dx%-4d ratio=%-6d seed=%u %-11s exact=%ld/%ld maxdelta=%d\n",
-                                W, H, ratios[r], seed, adv ? "adversarial" : "smooth",
-                                st.exact, st.pixels, st.maxdelta);
-                        failures++;
+                        if (bm >= 6) {
+                            int li;
+                            blend.wobble = 0.25f;
+                            if (bm != 11) {
+                                luma = malloc (W * H);
+                                for (li = 0; li < W * H; ++li)
+                                    luma[li] = (unsigned char) (xrand () & 0xff);
+                                blend.luma = luma;
+                            }
+                        }
+
+                        run_case (W, H, adv, ratios[r], 48, bm ? &blend : NULL, precalCoef, &st);
+                        free (luma);
+                        luma = NULL;
+
+                        total_pixels += st.pixels;
+                        total_exact += st.exact;
+                        if (st.maxdelta > global_maxdelta)
+                            global_maxdelta = st.maxdelta;
+
+                        if (st.maxdelta > 2 || st.exact * 100 < st.pixels * 99) {
+                            printf ("FAIL %4dx%-4d ratio=%-6d seed=%u %-11s blend=%d exact=%ld/%ld maxdelta=%d\n",
+                                    W, H, ratios[r], seed, adv ? "adversarial" : "smooth",
+                                    bm, st.exact, st.pixels, st.maxdelta);
+                            failures++;
+                        }
                     }
                 }
             }
@@ -314,7 +418,7 @@ static int bench (int frames)
             else gen_smooth (W, H, brutD, 48);
             ts = now_ms ();
             zoom_filter_c (W, H, src, dest, brutS, brutD,
-                           (f * 65536) / frames, precalCoef);
+                           (f * 65536) / frames, precalCoef, NULL);
             te = now_ms ();
             ms_c += te - ts;
         }
@@ -329,7 +433,7 @@ static int bench (int frames)
             else gen_smooth (W, H, brutD, 48);
             ts = now_ms ();
             zoom_filter_neon (W, H, src, dest, brutS, brutD,
-                              (f * 65536) / frames, precalCoef);
+                              (f * 65536) / frames, precalCoef, NULL);
             te = now_ms ();
             ms_n += te - ts;
         }

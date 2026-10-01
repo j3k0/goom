@@ -8,7 +8,7 @@
  */
 
 /* Generic PowerPC Code */
-void ppc_zoom_generic (int sizeX, int sizeY, Pixel *src, Pixel *dest, int *brutS, int *brutD, int buffratio, int precalCoef[16][16]);
+void ppc_zoom_generic (int sizeX, int sizeY, Pixel *src, Pixel *dest, int *brutS, int *brutD, int buffratio, int precalCoef[16][16], const ZoomBlend *blend);
 
 /* G4 Specific PowerPC Code (Possible use of Altivec and Data Streams) */
-void ppc_zoom_G4 (int sizeX, int sizeY, Pixel *src, Pixel *dest, int *brutS, int *brutD, int buffratio, int precalCoef[16][16]);
+void ppc_zoom_G4 (int sizeX, int sizeY, Pixel *src, Pixel *dest, int *brutS, int *brutD, int buffratio, int precalCoef[16][16], const ZoomBlend *blend);
