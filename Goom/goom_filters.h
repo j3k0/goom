@@ -57,11 +57,12 @@ void zoomFilterFastRGB (PluginInfo *goomInfo, Pixel * pix1, Pixel * pix2, ZoomFi
  * this frame by the transformation buffer. Returns (0, 0) when the zoom
  * filter is disabled or its buffers are not ready yet.
  * (x, y) is clamped to the screen, so offscreen positions get the nearest
- * edge velocity. */
+ * edge velocity.
+ * When the kaleidoscope addon folds the transformation space, the raw
+ * transform vector is not the motion the content makes (it carries the
+ * fold's own displacement): this returns the flow the mirrored content
+ * really travels - bounded like the base mode, mirror-consistent from one
+ * sector to the next, though flipped across the seams. */
 void zoomFilterGetVelocity (PluginInfo *goomInfo, float x, float y, float *vx, float *vy);
-/* 1 while the kaleidoscope addon is folding the transformation space:
- * the velocity field is then discontinuous across the mirror seams, so
- * FX that drag on it (tentacles, flying stars) should decouple. */
-int zoomFilterKaleidoActive (PluginInfo *goomInfo);
 
 #endif
