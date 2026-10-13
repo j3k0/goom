@@ -6,8 +6,9 @@ systems. Pure C core, C++ engine layers, SDL2 desktop front-end.
 
 Licensed under the **GNU LGPL-2.1** — see [LICENSE](LICENSE) and
 [COPYING.README](COPYING.README) for copyright details and attribution.
-For static linking into store-distributed app binaries, the
-copyright holders' written additional permission is recorded in
+The copyright holders' additional permission for their own
+statically linked app binaries (not extended to third parties) is
+recorded in
 [LGPL-ADDITIONAL-PERMISSION.md](LGPL-ADDITIONAL-PERMISSION.md).
 
 ## Layout
